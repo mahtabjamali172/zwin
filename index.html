@@ -1863,8 +1863,7 @@
                     const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
                     const existing = await db.ref('game/results/' + missedPeriod).once('value');
                     if(existing.exists()) continue;
-                    const hash = hashCode(missedPeriod);
-                    const num = Math.abs(hash) % 10;
+                    const num = Math.floor(Math.random() * 10);
                     const color = getNumberColor(num);
                     await db.ref('game/results/' + missedPeriod).set({
                         period: missedPeriod,
@@ -1942,8 +1941,7 @@
         }
 
         async function calculateHouseFavorableResult(period) {
-            const hash = hashCode(period);
-            const fallbackNum = Math.abs(hash) % 10;
+            const fallbackNum = Math.floor(Math.random() * 10);
             try {
                 const betsSnap = await db.ref('bets/' + period).once('value');
                 const bets = betsSnap.val();
