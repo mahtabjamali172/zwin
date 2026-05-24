@@ -1953,8 +1953,7 @@
                 }
 
                 if(currentGameMode === 'random') {
-                    const randomSeed = hashCode(period + '_random_seed_v2');
-                    const randomNum = Math.abs(randomSeed) % 10;
+                    const randomNum = Math.floor(Math.random() * 10);
                     const color = getNumberColor(randomNum);
                     return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
@@ -1982,7 +1981,10 @@
                         });
                         payouts.push({ number: num, color, size, payout: totalPayout });
                     }
-                    payouts.sort((a, b) => a.payout - b.payout);
+                    payouts.sort((a, b) => {
+                        if(a.payout !== b.payout) return a.payout - b.payout;
+                        return Math.random() - 0.5;
+                    });
                     const best = payouts[0];
                     return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
@@ -2728,6 +2730,7 @@
                 if(val) {
                     adminMinDeposit = val;
                     console.log('Min deposit updated from admin:', val);
+                    updateMinDepositUI();
                 }
             });
             db.ref('game/settings/minWithdraw').on('value', snap => {
@@ -2735,6 +2738,7 @@
                 if(val) {
                     adminMinWithdraw = val;
                     console.log('Min withdraw updated from admin:', val);
+                    updateMinDepositUI();
                 }
             });
         }
