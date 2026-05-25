@@ -1184,6 +1184,9 @@
         let isOnline = true;
         let timerSynced = false;
 
+        // Keep only last N results for performance - Firebase mein sirf last 10
+        const KEEP_LAST_N_RESULTS = 10;
+
         const GAME_DURATION = 30;
         const INVITATION_TARGET = 100;
         const INVITATION_MIN_DEPOSIT = 500;
@@ -1771,6 +1774,53 @@
             } catch(e) { toast('Error saving account: ' + e.message); }
         }
 
+        // ===================== Auto Delete - Keep Only Last 10 Periods =====================
+        async function cleanupOldBets() {
+            try {
+                if (!currentUser) return;
+                // Get periods to keep (last 10 results + current)
+                const resultsSnap = await db.ref('game/results').orderByChild('timestamp').limitToLast(KEEP_LAST_N_RESULTS).once('value');
+                const results = resultsSnap.val() || {};
+                const periodsToKeep = Object.keys(results);
+
+                const currentPdSnap = await db.ref('game/currentPeriod').once('value');
+                const currentPd = currentPdSnap.val();
+                if (currentPd && currentPd.period) periodsToKeep.push(currentPd.period);
+
+                // Delete user bets not in kept periods
+                const snap = await db.ref('userBets/' + currentUser.uid).once('value');
+                const bets = snap.val() || {};
+                let deletedCount = 0;
+                const updates = {};
+                Object.entries(bets).forEach(([betId, bet]) => {
+                    if (bet.period && !periodsToKeep.includes(bet.period)) {
+                        updates[betId] = null;
+                        deletedCount++;
+                    }
+                });
+                if (deletedCount > 0) {
+                    await db.ref('userBets/' + currentUser.uid).update(updates);
+                    console.log('[Auto-Cleanup] Deleted ' + deletedCount + ' old bets. Kept periods: ' + periodsToKeep.join(', '));
+                }
+            } catch(e) { console.error('[Auto-Cleanup] Error:', e); }
+        }
+
+        // ===================== Auto Delete Old Results - Keep Only Last 10 =====================
+        async function cleanupOldResults() {
+            try {
+                const snap = await db.ref('game/results').orderByChild('timestamp').once('value');
+                const results = snap.val() || {};
+                const entries = Object.entries(results);
+                if (entries.length <= KEEP_LAST_N_RESULTS) return;
+                entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+                const toDelete = entries.slice(0, entries.length - KEEP_LAST_N_RESULTS);
+                const updates = {};
+                toDelete.forEach(([period, _]) => { updates['game/results/' + period] = null; });
+                await db.ref().update(updates);
+                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results');
+            } catch(e) { console.error('[Results Cleanup] Error:', e); }
+        }
+
         // ===================== Game Logic =====================
         function initGame() {
             initOnlineDetection();
@@ -1783,6 +1833,11 @@
             listenGameMode();
             listenNotifications();
             listenMinDeposit();
+            // Auto-delete old data - Sirf Current Period + Last 10 History rakho
+            // Baaki sab auto delete ho jaye har 5 minute mein
+            cleanupOldBets();
+            cleanupOldResults();
+            setInterval(() => { cleanupOldBets(); cleanupOldResults(); }, 5 * 60 * 1000);
             setInterval(loadUserData, 10000);
             setInterval(loadInvitationProgress, 30000);
         }
@@ -1804,7 +1859,8 @@
             try {
                 const snap = await db.ref('game/lastResetDate').once('value');
                 if(snap.val() !== todayDateKey) {
-                    await db.ref('game/results').remove();
+                    // Daily reset: sirf last 10 results rakho, baaki delete
+                    await cleanupOldResults();
                     await db.ref('game/lastResetDate').set(todayDateKey);
                     shownResults.clear();
                 }
@@ -1937,6 +1993,10 @@
                 await db.ref('game/results/' + resultPeriod).set(result);
                 await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
+                // Naya result save hone ke baad purana data auto-delete kar do
+                // Sirf last 10 history + current period rakho, baaki sab delete
+                await cleanupOldResults();
+                await cleanupOldBets();
             } catch(e) { console.error('Result error:', e); }
         }
 
@@ -2468,6 +2528,8 @@
                     const snap = await db.ref('withdrawals').orderByChild('userId').equalTo(currentUser.uid).limitToLast(20).once('value');
                     renderTransList(snap.val(), 'withdraw');
                 } else if(type === 'bet') {
+                    // Purani bets cleanup - sirf last 10 periods rakho
+                    await cleanupOldBets();
                     const snap = await db.ref('userBets/' + currentUser.uid).limitToLast(50).once('value');
                     const bets = snap.val() || {};
                     const list = Object.entries(bets).reverse();
