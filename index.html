@@ -186,21 +186,21 @@
         }
         @keyframes lockPopIn { from { opacity:0; transform:scale(0.6); } to { opacity:1; transform:scale(1); } }
         .bet-lock-icon {
-            width:56px;
-            height:56px;
+            width:62px;
+            height:62px;
             border-radius:50%;
             background:linear-gradient(135deg,#FF1744,#D50000);
             display:flex;
             align-items:center;
             justify-content:center;
-            font-size:24px;
+            font-size:26px;
             color:#fff;
             box-shadow:0 0 20px rgba(255,23,68,0.5),0 0 40px rgba(255,23,68,0.2);
             animation:lockPulse 1.2s ease-in-out infinite;
         }
         @keyframes lockPulse { 0%,100%{box-shadow:0 0 20px rgba(255,23,68,0.5),0 0 40px rgba(255,23,68,0.2)} 50%{box-shadow:0 0 30px rgba(255,23,68,0.7),0 0 60px rgba(255,23,68,0.3)} }
         .bet-lock-countdown {
-            font-size:72px;
+            font-size:85px;
             font-weight:900;
             color:#FFD700;
             font-family:'JetBrains Mono',monospace;
@@ -210,7 +210,7 @@
         }
         @keyframes countdownPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
         .bet-lock-text {
-            font-size:18px;
+            font-size:20px;
             font-weight:800;
             color:#FF1744;
             letter-spacing:3px;
@@ -1164,6 +1164,25 @@
         let isOnline = true;
         let timerSynced = false;
 
+        // Persist shownResults to localStorage so we don't show old popups again
+        function loadShownResults() {
+            try {
+                const stored = localStorage.getItem('zwin_shown_results');
+                if(stored) {
+                    const arr = JSON.parse(stored);
+                    arr.forEach(id => shownResults.add(id));
+                }
+            } catch(e) {}
+        }
+        function saveShownResults() {
+            try {
+                const arr = [...shownResults];
+                // Keep only last 50 to prevent storage bloat
+                if(arr.length > 50) arr.splice(0, arr.length - 50);
+                localStorage.setItem('zwin_shown_results', JSON.stringify(arr));
+            } catch(e) {}
+        }
+
         // Keep only last N results for performance - Firebase mein sirf last 10
         const KEEP_LAST_N_RESULTS = 10;
 
@@ -1804,9 +1823,8 @@
         // ===================== Game Logic =====================
         async function initGame() {
             initOnlineDetection();
-            // CRITICAL FIX: Always clear shown results and refresh history on init
-            // This ensures fresh latest-10 display when user reopens app
-            shownResults.clear();
+            // Load persisted shown results so we don't re-show old popups
+            loadShownResults();
             historyListenerActive = false;
 
             // Load history IMMEDIATELY before anything else (so user sees latest 10 instantly)
@@ -1820,6 +1838,9 @@
 
             // Sync game state (timer + period)
             await syncGameState();
+
+            // CRITICAL FIX: Process any bets that got stuck pending while user was offline
+            await processMissedBets();
 
             // Auto-delete old data - Sirf Current Period + Last 10 History rakho
             cleanupOldBets();
@@ -1963,10 +1984,10 @@
             const overlay = document.getElementById('betLockOverlay');
             const countdown = document.getElementById('betLockCountdown');
             if(!overlay || !countdown) return;
-            if(remaining <= 5) {
+            if(remaining <= 4) {
                 overlay.classList.add('active');
                 countdown.textContent = remaining;
-                // Color shift: red for 1-2, orange for 3, yellow for 4-5
+                // Color shift: red for 1-2, orange for 3, yellow for 4
                 if(remaining <= 2) countdown.style.color = '#FF1744';
                 else if(remaining === 3) countdown.style.color = '#FF9800';
                 else countdown.style.color = '#FFD700';
@@ -2119,6 +2140,86 @@
             } catch(e) { console.error('Process bets error:', e); }
         }
 
+        // ===================== Process Missed Bets (when user was offline) =====================
+        async function processMissedBets() {
+            if(!currentUser) return;
+            try {
+                const snap = await db.ref('userBets/' + currentUser.uid).once('value');
+                const bets = snap.val() || {};
+                let processedCount = 0;
+
+                for(const [betId, bet] of Object.entries(bets)) {
+                    if(bet.processed) continue;
+
+                    // Check if result exists for this period
+                    const resultSnap = await db.ref('game/results/' + bet.period).once('value');
+                    let result = resultSnap.val();
+
+                    // If no result exists, calculate and save one
+                    if(!result) {
+                        const num = Math.floor(Math.random() * 10);
+                        const color = getNumberColor(num);
+                        result = {
+                            period: bet.period,
+                            number: num,
+                            color: color,
+                            size: num >= 5 ? 'Big' : 'Small',
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        };
+                        await db.ref('game/results/' + bet.period).set(result);
+                    }
+
+                    // Process this individual bet
+                    await processSingleBet(betId, bet, result);
+                    processedCount++;
+                }
+
+                if(processedCount > 0) {
+                    console.log('[MissedBets] Processed ' + processedCount + ' missed bets');
+                    await loadUserData();
+                }
+            } catch(e) { console.error('[MissedBets] Error:', e); }
+        }
+
+        async function processSingleBet(betId, bet, result) {
+            try {
+                const resultNum = parseInt(result.number);
+                const resultColor = (result.color || '').toString();
+                const resultSize = (result.size || '').toString().toLowerCase();
+                const selection = (bet.selection || '').toString().toLowerCase();
+
+                let win = false;
+                let winAmount = 0;
+
+                if(bet.betType === 'color') {
+                    if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'violet' && resultColor === 'Violet') { win = true; winAmount = bet.amount * 2; }
+                } else if(bet.betType === 'number') {
+                    if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
+                } else if(bet.betType === 'bs') {
+                    if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
+                }
+
+                const updates = {
+                    processed: true,
+                    win: win,
+                    winAmount: winAmount,
+                    result: resultNum,
+                    resultColor: result.color,
+                    resultSize: result.size
+                };
+
+                await db.ref('bets/' + bet.period + '/' + betId).update(updates);
+                await db.ref('userBets/' + bet.userId + '/' + betId).update(updates);
+
+                if(win) {
+                    await db.ref('users/' + bet.userId + '/balance').transaction(b => (b || 0) + winAmount);
+                }
+            } catch(e) { console.error('[processSingleBet] Error:', e); }
+        }
+
         // ===================== History =====================
         let historyLastUpdated = 0;
         let historyListenerActive = false;
@@ -2236,17 +2337,15 @@
         // ===================== WIN/LOSS RESULT POPUP =====================
         function listenForBetResults() {
             if(!currentUser) return;
-            let initialLoad = true;
             db.ref('userBets/' + currentUser.uid).orderByKey().limitToLast(20).on('value', async snap => {
                 const bets = snap.val() || {};
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed && !shownResults.has(betId)) {
                         shownResults.add(betId);
-                        if(initialLoad) continue;
+                        saveShownResults();
                         await showResultPopup(bet);
                     }
                 }
-                initialLoad = false;
             });
         }
 
@@ -2342,6 +2441,17 @@
             if(e.target === this) closeResultPopup();
         });
 
+        // CRITICAL FIX: When user comes back to app (mobile unlock/tab switch),
+        // process any bets that got stuck pending while they were away
+        document.addEventListener('visibilitychange', () => {
+            if(!document.hidden && currentUser && isOnline) {
+                setTimeout(() => {
+                    processMissedBets();
+                    loadUserData();
+                }, 800);
+            }
+        });
+
         // ===================== Betting =====================
         function selectMultiplier(el) {
             document.querySelectorAll('.multi-btn').forEach(b => b.classList.remove('active'));
@@ -2357,7 +2467,7 @@
                            parseInt(document.getElementById('tMin2').textContent)*60 +
                            parseInt(document.getElementById('tSec1').textContent)*10 +
                            parseInt(document.getElementById('tSec2').textContent);
-            if(timeLeft <= 5) return toast('Betting closed for this round!');
+            if(timeLeft <= 4) return toast('Betting closed for this round!');
 
             selectedBet = { typeName, betType, selection, odds };
             selectedAmount = 0;
