@@ -223,17 +223,6 @@
             letter-spacing:1px;
         }
 
-        /* ===== LIVE BETS ===== */
-        .live-bets { background:linear-gradient(135deg,#111,#1a0a2e); margin:0 12px 10px; border-radius:12px; padding:12px; border:1px solid rgba(124,77,255,0.15); box-shadow:0 2px 10px rgba(0,0,0,0.2); }
-        .section-title { font-size:13px; font-weight:700; color:#FFD700; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
-        .section-title i { color:#7C4DFF; }
-        .live-bet-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(124,77,255,0.1); font-size:12px; }
-        .live-bet-row:last-child { border-bottom:none; }
-        .lb-user { color:#aaa; display:flex; align-items:center; gap:5px; }
-        .lb-user i { color:#666; font-size:10px; }
-        .lb-detail { color:#888; }
-        .lb-amount { font-weight:700; color:#FFD700; }
-
         /* ===== HISTORY TABLE ===== */
         .history-section { background:linear-gradient(135deg,#111,#1a0a2e); margin:0 12px 80px; border-radius:12px; padding:12px; border:1px solid rgba(124,77,255,0.15); }
         .history-tabs { display:flex; gap:8px; margin-bottom:10px; }
@@ -644,10 +633,7 @@
                 <!-- Lock Overlay - shown when betting is closed (last 5 seconds) -->
                 <div class="bet-lock-overlay" id="betLockOverlay">
                     <div class="bet-lock-content">
-                        <div class="bet-lock-icon"><i class="fas fa-lock"></i></div>
                         <div class="bet-lock-countdown" id="betLockCountdown">5</div>
-                        <div class="bet-lock-text">BETTING CLOSED</div>
-                        <div class="bet-lock-subtext">Wait for next round</div>
                     </div>
                 </div>
 
@@ -690,12 +676,6 @@
                     <button class="bs-btn big-btn" onclick="openBetPopup('Big','bs','big',2)">Big</button>
                     <button class="bs-btn small-btn" onclick="openBetPopup('Small','bs','small',2)">Small</button>
                 </div>
-            </div>
-
-            <!-- Live Bets -->
-            <div class="live-bets">
-                <div class="section-title"><i class="fas fa-fire" style="color:#FF9800;"></i> Live Bets</div>
-                <div id="liveBetsList"><div style="text-align:center;color:#666;font-size:12px;padding:10px;">No active bets</div></div>
             </div>
 
             <!-- History -->
@@ -1822,19 +1802,26 @@
         }
 
         // ===================== Game Logic =====================
-        function initGame() {
+        async function initGame() {
             initOnlineDetection();
-            syncGameState();
+            // CRITICAL FIX: Always clear shown results and refresh history on init
+            // This ensures fresh latest-10 display when user reopens app
+            shownResults.clear();
+            historyListenerActive = false;
+
+            // Load history IMMEDIATELY before anything else (so user sees latest 10 instantly)
+            await loadHistory();
             listenHistory();
-            loadHistory();
-            listenLiveBets();
             listenForBetResults();
             listenAnnouncement();
             listenGameMode();
             listenNotifications();
             listenMinDeposit();
+
+            // Sync game state (timer + period)
+            await syncGameState();
+
             // Auto-delete old data - Sirf Current Period + Last 10 History rakho
-            // Baaki sab auto delete ho jaye har 5 minute mein
             cleanupOldBets();
             cleanupOldResults();
             setInterval(() => { cleanupOldBets(); cleanupOldResults(); }, 5 * 60 * 1000);
@@ -1902,18 +1889,33 @@
 
         async function backfillMissingPeriods(dateKey, currentPeriod) {
             try {
-                const snap = await db.ref('game/results').orderByChild('timestamp').limitToLast(1).once('value');
+                const snap = await db.ref('game/results').orderByKey().limitToLast(1).once('value');
                 const results = snap.val() || {};
                 const entries = Object.entries(results);
                 if(entries.length === 0) return;
                 const lastPeriod = entries[0][0];
                 const lastSeq = parseInt(lastPeriod.slice(-3));
                 const lastDateKey = lastPeriod.slice(0, -3);
-                if(lastDateKey !== dateKey) return;
+
+                // If date changed, don't backfill - start fresh for new day
+                if(lastDateKey !== dateKey) {
+                    console.log('[Backfill] Date changed, skipping backfill for new day');
+                    return;
+                }
+
                 const currentSeq = parseInt(currentPeriod.slice(-3));
                 const missedCount = currentSeq - lastSeq - 1;
-                if(missedCount <= 0 || missedCount > 50) return;
 
+                // CRITICAL FIX: If more than 10 periods missed, skip backfill entirely.
+                // This prevents the "jumping" issue where periods slowly catch up.
+                // We only keep last 10 results anyway, so old gaps don't matter.
+                if(missedCount <= 0) return;
+                if(missedCount > 10) {
+                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping. Only last 10 kept anyway.');
+                    return;
+                }
+
+                // Only backfill the most recent missed periods (up to 10)
                 for(let i = 1; i <= missedCount; i++) {
                     const missedSeq = lastSeq + i;
                     const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
@@ -1929,7 +1931,7 @@
                         timestamp: firebase.database.ServerValue.TIMESTAMP
                     });
                 }
-                if(missedCount > 0) console.log('Backfilled', missedCount, 'missing periods');
+                if(missedCount > 0) console.log('[Backfill] Backfilled', missedCount, 'missing periods');
             } catch(e) { console.error('Backfill error:', e); }
         }
 
@@ -2118,13 +2120,82 @@
         }
 
         // ===================== History =====================
+        let historyLastUpdated = 0;
+        let historyListenerActive = false;
+
         function listenHistory() {
-            db.ref('game/results').orderByChild('timestamp').limitToLast(10).on('value', snap => {
+            // Use orderByKey + limitToLast for reliable latest-10 results
+            // Period keys are chronologically ordered (e.g. 20260525001, 20260525002)
+            db.ref('game/results').orderByKey().limitToLast(10).on('value', snap => {
                 try {
                     const results = snap.val() || {};
-                    const list = Object.entries(results).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+                    // Sort by period key descending (newest first)
+                    const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
 
                     const ballsContainer = document.getElementById('historyBalls');
+                    if (ballsContainer) {
+                        ballsContainer.innerHTML = '';
+                        list.slice(0, 5).forEach(([_, r]) => {
+                            const ball = document.createElement('div');
+                            let cls = 'ball-red';
+                            if(r.color === 'Green') cls = 'ball-green';
+                            else if(r.color === 'Violet') cls = 'ball-violet';
+                            ball.className = 'h-ball ' + cls;
+                            ball.textContent = r.number;
+                            ballsContainer.appendChild(ball);
+                        });
+                    }
+
+                    const tbody = document.getElementById('historyBody');
+                    if (tbody) {
+                        tbody.innerHTML = '';
+                        list.slice(0, 10).forEach(([period, r]) => {
+                            const tr = document.createElement('tr');
+                            let ballCls = 'ball-red';
+                            let colorHex = '#FF1744';
+                            if(r.color === 'Green') { ballCls = 'ball-green'; colorHex = '#00E676'; }
+                            else if(r.color === 'Violet') { ballCls = 'ball-violet'; colorHex = '#7C4DFF'; }
+                            const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
+                            const shortPeriod = period.length > 6 ? period.slice(-9) : period;
+                            tr.innerHTML = '<td style="font-family:monospace;font-size:11px;">' + shortPeriod + '</td>' +
+                                '<td><span class="hist-ball ' + ballCls + '">' + r.number + '</span></td>' +
+                                '<td>' + r.number + '</td>' +
+                                '<td style="color:' + colorHex + ';font-weight:700;">' + r.color + '</td>' +
+                                '<td class="' + bsCls + '">' + r.size + '</td>';
+                            tbody.appendChild(tr);
+                        });
+                        if(list.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;">No results yet</td></tr>';
+                        }
+                    }
+
+                    historyLastUpdated = Date.now();
+                    updateLiveIndicator(true);
+                    historyListenerActive = true;
+                } catch(e) { console.error('History error:', e); }
+            }, err => {
+                console.error('History listener error:', err);
+                historyListenerActive = false;
+            });
+        }
+
+        function updateLiveIndicator(active) {
+            const indicator = document.getElementById('historyLiveIndicator');
+            if(indicator) {
+                indicator.style.background = active ? '#00E676' : '#FF1744';
+                indicator.style.boxShadow = active ? '0 0 8px #00E676' : 'none';
+            }
+        }
+
+        async function loadHistory() {
+            // Force immediate history load on app init
+            try {
+                const snap = await db.ref('game/results').orderByKey().limitToLast(10).once('value');
+                const results = snap.val() || {};
+                const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+
+                const ballsContainer = document.getElementById('historyBalls');
+                if (ballsContainer) {
                     ballsContainer.innerHTML = '';
                     list.slice(0, 5).forEach(([_, r]) => {
                         const ball = document.createElement('div');
@@ -2135,8 +2206,10 @@
                         ball.textContent = r.number;
                         ballsContainer.appendChild(ball);
                     });
+                }
 
-                    const tbody = document.getElementById('historyBody');
+                const tbody = document.getElementById('historyBody');
+                if (tbody) {
                     tbody.innerHTML = '';
                     list.slice(0, 10).forEach(([period, r]) => {
                         const tr = document.createElement('tr');
@@ -2145,47 +2218,19 @@
                         if(r.color === 'Green') { ballCls = 'ball-green'; colorHex = '#00E676'; }
                         else if(r.color === 'Violet') { ballCls = 'ball-violet'; colorHex = '#7C4DFF'; }
                         const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
-                        tr.innerHTML = '<td style="font-family:monospace;font-size:11px;">' + period + '</td>' +
+                        const shortPeriod = period.length > 6 ? period.slice(-9) : period;
+                        tr.innerHTML = '<td style="font-family:monospace;font-size:11px;">' + shortPeriod + '</td>' +
                             '<td><span class="hist-ball ' + ballCls + '">' + r.number + '</span></td>' +
                             '<td>' + r.number + '</td>' +
                             '<td style="color:' + colorHex + ';font-weight:700;">' + r.color + '</td>' +
                             '<td class="' + bsCls + '">' + r.size + '</td>';
                         tbody.appendChild(tr);
                     });
-                    if(list.length === 0) tbody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;">No results yet</td></tr>';
-                } catch(e) { console.error('History error:', e); }
-            });
-        }
-
-        async function loadHistory() {
-            // Keep for backward compatibility - real-time listener handles updates
-        }
-
-        // ===================== Live Bets =====================
-        function listenLiveBets() {
-            db.ref('bets').orderByKey().limitToLast(1).on('value', snap => {
-                const periods = snap.val() || {};
-                const allBets = [];
-                Object.values(periods).forEach(bets => {
-                    Object.values(bets).forEach(b => { if(!b.processed) allBets.push(b); });
-                });
-                updateLiveBetsUI(allBets.slice(-10).reverse());
-            });
-        }
-
-        function updateLiveBetsUI(bets) {
-            const container = document.getElementById('liveBetsList');
-            if(!bets.length) { container.innerHTML = '<div style="text-align:center;color:#666;font-size:12px;padding:10px;">No active bets</div>'; return; }
-            container.innerHTML = '';
-            bets.forEach(b => {
-                const div = document.createElement('div');
-                div.className = 'live-bet-row';
-                const sel = b.selection.toString().toUpperCase();
-                div.innerHTML = '<span class="lb-user"><i class="fas fa-user-circle"></i> ' + (b.userName || 'User') + '</span>' +
-                    '<span class="lb-detail">' + sel + ' (' + b.betType + ')</span>' +
-                    '<span class="lb-amount">Rs ' + b.amount + '</span>';
-                container.appendChild(div);
-            });
+                    if(list.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;">No results yet</td></tr>';
+                    }
+                }
+            } catch(e) { console.error('Force history load error:', e); }
         }
 
         // ===================== WIN/LOSS RESULT POPUP =====================
