@@ -2747,19 +2747,8 @@
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
                     let result = resultSnap.val();
 
-                    // If no result exists, calculate and save one
-                    if(!result) {
-                        const num = Math.floor(Math.random() * 10);
-                        const color = getNumberColor(num);
-                        result = {
-                            period: bet.period,
-                            number: num,
-                            color: color,
-                            size: num >= 5 ? 'Big' : 'Small',
-                            timestamp: firebase.database.ServerValue.TIMESTAMP
-                        };
-                        await db.ref('game/results/' + bet.period).set(result);
-                    }
+                    // If no result exists yet, skip and let processGameResult handle it
+                    if(!result) continue;
 
                     // Process this individual bet
                     await processSingleBet(betId, bet, result);
