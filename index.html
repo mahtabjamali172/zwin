@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zwin WinGo 30Sec</title>
+    <title>Zwin WinGo Game</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Inter','Segoe UI',Arial,sans-serif; background:#0a0a0a; color:#fff; overflow-x:hidden; }
@@ -409,83 +410,458 @@
         .ticket-item .t-meta { display:flex; justify-content:space-between; font-size:10px; color:#666; }
         .ticket-item .t-reply { background:rgba(0,230,118,0.08); padding:6px; border-radius:6px; margin-top:6px; font-size:11px; color:#00E676; border:1px solid rgba(0,230,118,0.15); }
 
-        /* ===== WIN POPUP ===== */
-        .result-popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:300; display:none; align-items:center; justify-content:center; backdrop-filter:blur(6px); }
-        .result-popup-overlay.active { display:flex; }
-        .sparkle-container { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
-        .sparkle { position:absolute; width:4px; height:4px; background:#FFD700; border-radius:50%; animation:sparkleFloat 3s ease-in-out infinite; box-shadow:0 0 6px #FFD700,0 0 12px #7C4DFF; }
-        .sparkle:nth-child(1) { left:10%; top:20%; animation-delay:0s; width:6px; height:6px; }
-        .sparkle:nth-child(2) { left:80%; top:15%; animation-delay:0.5s; }
-        .sparkle:nth-child(3) { left:70%; top:70%; animation-delay:1s; width:5px; height:5px; }
-        .sparkle:nth-child(4) { left:20%; top:80%; animation-delay:1.5s; }
-        .sparkle:nth-child(5) { left:50%; top:10%; animation-delay:2s; width:8px; height:8px; }
-        .sparkle:nth-child(6) { left:90%; top:50%; animation-delay:0.3s; }
-        .sparkle:nth-child(7) { left:5%; top:60%; animation-delay:0.8s; width:5px; height:5px; }
-        .sparkle:nth-child(8) { left:60%; top:85%; animation-delay:1.3s; }
-        .sparkle:nth-child(9) { left:30%; top:40%; animation-delay:1.8s; width:4px; height:4px; }
-        .sparkle:nth-child(10) { left:85%; top:30%; animation-delay:2.2s; }
-        .sparkle:nth-child(11) { left:15%; top:50%; animation-delay:0.2s; width:6px; height:6px; }
-        .sparkle:nth-child(12) { left:75%; top:45%; animation-delay:0.7s; }
-        .sparkle:nth-child(13) { left:40%; top:75%; animation-delay:1.1s; width:5px; height:5px; }
-        .sparkle:nth-child(14) { left:55%; top:25%; animation-delay:1.6s; }
-        .sparkle:nth-child(15) { left:25%; top:65%; animation-delay:2.1s; }
-        @keyframes sparkleFloat { 0%,100%{opacity:0;transform:translateY(0)scale(0)} 50%{opacity:1;transform:translateY(-30px)scale(1)} }
+        /* ===== VIP RESULT POPUP ===== */
+        .vip-result-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        .vip-result-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
 
-        .win-popup-box { width:90%; max-width:320px; border-radius:24px; overflow:hidden; animation:winPopIn 0.6s cubic-bezier(0.175,0.885,0.32,1.275); position:relative; border:2px solid rgba(124,77,255,0.5); box-shadow:0 0 60px rgba(124,77,255,0.3),0 0 120px rgba(255,215,0,0.1); }
-        @keyframes winPopIn { from{opacity:0;transform:scale(0.5)translateY(40px)} to{opacity:1;transform:scale(1)translateY(0)} }
-        .win-popup-top { background:linear-gradient(145deg,#FFD700,#FFA000,#7C4DFF); padding:30px 15px 20px; text-align:center; position:relative; overflow:hidden; }
-        .win-popup-top::before { content:''; position:absolute; inset:0; background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,0.2) 50%,transparent 70%); animation:shimmer 2s ease-in-out infinite; }
-        @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
-        .win-popup-trophy { width:80px; height:80px; margin:0 auto 14px; background:linear-gradient(145deg,#FFD700,#7C4DFF); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 25px rgba(124,77,255,0.6),0 0 50px rgba(255,215,0,0.3),inset 0 -4px 10px rgba(0,0,0,0.2); position:relative; z-index:1; animation:trophyGlow 1.5s ease-in-out infinite; }
-        @keyframes trophyGlow { 0%,100%{box-shadow:0 0 25px rgba(124,77,255,0.6),0 0 50px rgba(255,215,0,0.3)} 50%{box-shadow:0 0 40px rgba(255,215,0,0.8),0 0 80px rgba(124,77,255,0.5)} }
-        .win-popup-trophy i { font-size:38px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.3); z-index:1; }
-        .trophy-ring { position:absolute; inset:-8px; border:2px solid rgba(255,215,0,0.4); border-radius:50%; animation:trophyRing 2s ease-out infinite; }
-        @keyframes trophyRing { 0%{transform:scale(1);opacity:1} 100%{transform:scale(1.4);opacity:0} }
-        .win-popup-congrats { color:#fff; font-size:24px; font-weight:900; text-shadow:0 3px 6px rgba(0,0,0,0.3); margin-bottom:10px; position:relative; z-index:1; font-family:'Playfair Display',serif; letter-spacing:2px; }
-        .win-lottery-row { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:4px; position:relative; z-index:1; }
-        .win-lottery-label { color:rgba(255,255,255,0.9); font-size:11px; }
-        .win-lottery-tag { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:700; color:#fff; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.3); }
-        .win-lottery-tag.red { background:rgba(255,23,68,0.5); }
-        .win-lottery-tag.green { background:rgba(0,230,118,0.5); }
-        .win-lottery-tag.violet { background:rgba(124,77,255,0.5); }
-        .win-popup-bottom { background:linear-gradient(135deg,#111,#0f0518); padding:20px 15px 15px; text-align:center; position:relative; }
-        .win-popup-bottom::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,#7C4DFF,transparent); }
-        .win-bonus-label { color:#FFD700; font-size:14px; font-weight:700; margin-bottom:4px; letter-spacing:1px; }
-        .win-bonus-amount { color:#FFD700; font-size:32px; font-weight:900; margin-bottom:6px; font-family:'JetBrains Mono',monospace; text-shadow:0 0 15px rgba(124,77,255,0.5); }
-        .win-period-info { color:#888; font-size:11px; margin-bottom:12px; line-height:1.5; }
-        .win-auto-close { display:flex; align-items:center; justify-content:center; gap:5px; color:#666; font-size:12px; }
-        .win-auto-close i { color:#00E676; font-size:12px; }
+        /* Canvas particles layer */
+        .vip-particles-canvas {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
 
-        .confetti-piece { position:absolute; width:8px; height:8px; background:#FFD700; top:-10px; animation:confettiFall 3s ease-in infinite; border-radius:2px; }
-        .confetti-piece:nth-child(1) { left:10%; animation-delay:0s; background:#FFD700; }
-        .confetti-piece:nth-child(2) { left:20%; animation-delay:0.3s; background:#7C4DFF; width:6px; height:6px; }
-        .confetti-piece:nth-child(3) { left:30%; animation-delay:0.6s; background:#FFF8DC; width:10px; height:4px; }
-        .confetti-piece:nth-child(4) { left:40%; animation-delay:0.9s; background:#E91E63; }
-        .confetti-piece:nth-child(5) { left:50%; animation-delay:1.2s; background:#FFD700; width:5px; height:5px; }
-        .confetti-piece:nth-child(6) { left:60%; animation-delay:1.5s; background:#00E676; width:7px; height:7px; }
-        .confetti-piece:nth-child(7) { left:70%; animation-delay:1.8s; background:#7C4DFF; width:6px; height:8px; }
-        .confetti-piece:nth-child(8) { left:80%; animation-delay:2.1s; background:#FFD700; width:8px; height:5px; }
-        .confetti-piece:nth-child(9) { left:90%; animation-delay:2.4s; background:#FFF8DC; }
-        .confetti-piece:nth-child(10) { left:15%; animation-delay:0.4s; background:#E91E63; width:5px; height:8px; }
-        @keyframes confettiFall { 0%{transform:translateY(0)rotate(0deg);opacity:1} 100%{transform:translateY(400px)rotate(720deg);opacity:0} }
+        /* Glassmorphism popup card base */
+        .vip-popup-card {
+            background: linear-gradient(165deg, rgba(20,18,30,0.96) 0%, rgba(10,10,15,0.98) 100%);
+            backdrop-filter: blur(40px) saturate(1.3);
+            -webkit-backdrop-filter: blur(40px) saturate(1.3);
+            border-radius: 24px;
+            position: relative;
+            overflow: hidden;
+            width: 90%;
+            max-width: 360px;
+            z-index: 1;
+            will-change: transform, opacity;
+        }
 
-        /* ===== LOSS POPUP ===== */
-        .loss-popup-box { width:90%; max-width:300px; border-radius:20px; overflow:hidden; animation:lossPopIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275); position:relative; border:1px solid rgba(255,23,68,0.3); box-shadow:0 0 40px rgba(255,23,68,0.15); }
-        @keyframes lossPopIn { from{opacity:0;transform:scale(0.6)translateY(30px)} to{opacity:1;transform:scale(1)translateY(0)} }
-        .loss-popup-top { background:linear-gradient(145deg,#1a0a2e,#0f0518); padding:30px 15px 20px; text-align:center; position:relative; overflow:hidden; border-bottom:1px solid rgba(255,23,68,0.2); }
-        .loss-popup-top::after { content:''; position:absolute; inset:0; background:radial-gradient(circle at center,rgba(255,23,68,0.1),transparent 70%); pointer-events:none; }
-        .loss-popup-icon { width:70px; height:70px; margin:0 auto 14px; background:linear-gradient(145deg,#1a0a2e,#0f0518); border:3px solid rgba(255,23,68,0.5); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 18px rgba(255,23,68,0.2); position:relative; z-index:1; animation:lossPulse 2s ease-in-out infinite; }
-        @keyframes lossPulse { 0%,100%{box-shadow:0 0 18px rgba(255,23,68,0.2)} 50%{box-shadow:0 0 28px rgba(255,23,68,0.4)} }
-        .loss-popup-icon i { font-size:34px; color:#FF1744; }
-        .loss-popup-title { color:#fff; font-size:22px; font-weight:900; margin-bottom:8px; position:relative; z-index:1; letter-spacing:3px; }
-        .loss-popup-subtitle { color:rgba(255,255,255,0.4); font-size:12px; position:relative; z-index:1; }
-        .loss-popup-bottom { background:#0a0a0a; padding:20px 15px 15px; text-align:center; }
-        .loss-detail-row { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:10px; }
-        .loss-detail-tag { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; color:#fff; background:#1a0a2e; border:1px solid rgba(124,77,255,0.2); }
-        .loss-amount { color:#FF1744; font-size:24px; font-weight:900; margin-bottom:6px; font-family:'JetBrains Mono',monospace; }
-        .loss-period-info { color:#555; font-size:11px; margin-bottom:12px; line-height:1.5; }
-        .loss-auto-close { display:flex; align-items:center; justify-content:center; gap:5px; color:#444; font-size:12px; }
-        .loss-auto-close i { color:#FF1744; font-size:12px; }
+        /* Animated gradient border - win */
+        .vip-popup-card.win-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 24px;
+            padding: 2px;
+            background: linear-gradient(135deg, rgba(124,77,255,0.7), rgba(255,215,0,0.6), rgba(124,77,255,0.7));
+            background-size: 200% 200%;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: borderGlow 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        /* Animated gradient border - loss */
+        .vip-popup-card.loss-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 24px;
+            padding: 1.5px;
+            background: linear-gradient(135deg, rgba(255,23,68,0.5), rgba(120,20,40,0.3), rgba(255,23,68,0.5));
+            background-size: 200% 200%;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: borderGlow 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        /* Inner highlight line at top */
+        .vip-popup-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 10%;
+            right: 10%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        /* Popup content padding */
+        .vip-popup-content {
+            padding: 32px 24px 24px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ===== TROPHY SECTION (Win) ===== */
+        .vip-trophy-wrap {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vip-trophy-inner {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, rgba(255,215,0,0.15), rgba(124,77,255,0.1));
+            border: 2px solid rgba(255,215,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(124,77,255,0.2);
+            animation: trophyGlowPulse 2s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        .vip-trophy-inner svg {
+            width: 44px;
+            height: 44px;
+            filter: drop-shadow(0 0 8px rgba(255,215,0,0.5));
+        }
+
+        /* Trophy ring 1 */
+        .trophy-ring-1 {
+            position: absolute;
+            inset: -4px;
+            border: 2px solid rgba(255,215,0,0.2);
+            border-radius: 50%;
+            border-top-color: rgba(255,215,0,0.7);
+            animation: ringRotate1 3s linear infinite;
+            pointer-events: none;
+        }
+
+        /* Trophy ring 2 */
+        .trophy-ring-2 {
+            position: absolute;
+            inset: 2px;
+            border: 1.5px solid rgba(124,77,255,0.15);
+            border-radius: 50%;
+            border-bottom-color: rgba(124,77,255,0.5);
+            animation: ringRotate2 2.5s linear infinite reverse;
+            pointer-events: none;
+        }
+
+        @keyframes ringRotate1 { to { transform: rotate(360deg); } }
+        @keyframes ringRotate2 { to { transform: rotate(-360deg); } }
+        @keyframes trophyGlowPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(124,77,255,0.2); }
+            50% { box-shadow: 0 0 50px rgba(255,215,0,0.8), 0 0 80px rgba(124,77,255,0.4); }
+        }
+
+        /* ===== LOSS ICON SECTION ===== */
+        .vip-loss-icon-wrap {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vip-loss-icon-inner {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #1a0a2e, #0a0a0a);
+            border: 2px solid rgba(255,23,68,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(255,23,68,0.3), 0 0 40px rgba(255,23,68,0.08);
+            animation: lossIconGlow 3s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        .vip-loss-icon-inner svg {
+            width: 38px;
+            height: 38px;
+            filter: drop-shadow(0 0 6px rgba(255,23,68,0.4));
+        }
+
+        .loss-ring {
+            position: absolute;
+            inset: -6px;
+            border: 1.5px solid rgba(255,23,68,0.15);
+            border-radius: 50%;
+            border-left-color: rgba(255,23,68,0.45);
+            animation: lossRingRotate 4s linear infinite;
+            pointer-events: none;
+        }
+
+        /* Loss background pulse */
+        .loss-bg-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 180px;
+            height: 180px;
+            background: radial-gradient(circle, rgba(255,23,68,0.06) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: lossBgPulse 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes lossIconGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(255,23,68,0.2), 0 0 30px rgba(255,23,68,0.05); }
+            50% { box-shadow: 0 0 25px rgba(255,23,68,0.35), 0 0 50px rgba(255,23,68,0.1); }
+        }
+        @keyframes lossRingRotate { to { transform: rotate(360deg); } }
+        @keyframes lossBgPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+        }
+
+        /* ===== TITLE STYLES ===== */
+        .vip-win-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 26px;
+            font-weight: 900;
+            letter-spacing: 3px;
+            margin-bottom: 4px;
+            line-height: 1.2;
+        }
+        .vip-win-title .vip-gold-text {
+            color: #FFD700;
+            text-shadow: 0 0 15px rgba(255,215,0,0.4);
+        }
+        .vip-win-title .vip-white-text {
+            color: #fff;
+        }
+        .vip-win-title .star-icon {
+            color: #FFD700;
+            font-size: 18px;
+            margin: 0 6px;
+            text-shadow: 0 0 10px rgba(255,215,0,0.5);
+        }
+
+        .vip-loss-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            margin-bottom: 4px;
+            line-height: 1.2;
+        }
+        .vip-loss-title .loss-muted {
+            color: #888;
+        }
+        .vip-loss-title .loss-white {
+            color: #fff;
+        }
+
+        /* Decorative line */
+        .vip-deco-line {
+            width: 50px;
+            height: 2px;
+            margin: 12px auto;
+            border-radius: 1px;
+        }
+        .vip-deco-line.win-line {
+            background: linear-gradient(90deg, transparent, #FFD700, transparent);
+        }
+        .vip-deco-line.loss-line {
+            background: linear-gradient(90deg, transparent, rgba(255,23,68,0.5), transparent);
+        }
+
+        /* ===== RESULT TAGS ===== */
+        .vip-result-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .vip-result-tag {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            opacity: 0;
+            transform: translateY(15px);
+            animation: tagReveal 0.4s ease forwards;
+        }
+
+        .vip-result-tag.rt-color-red { background: rgba(255,23,68,0.6); border: 1px solid rgba(255,23,68,0.4); }
+        .vip-result-tag.rt-color-green { background: rgba(0,230,118,0.5); border: 1px solid rgba(0,230,118,0.35); }
+        .vip-result-tag.rt-color-violet { background: rgba(124,77,255,0.5); border: 1px solid rgba(124,77,255,0.35); }
+        .vip-result-tag.rt-num { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
+        .vip-result-tag.rt-size { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
+
+        /* Win tag stagger */
+        .win-card .vip-result-tag:nth-child(1) { animation-delay: 0.4s; }
+        .win-card .vip-result-tag:nth-child(2) { animation-delay: 0.55s; }
+        .win-card .vip-result-tag:nth-child(3) { animation-delay: 0.7s; }
+
+        /* Loss tag stagger */
+        .loss-card .vip-result-tag:nth-child(1) { animation-delay: 0.3s; }
+        .loss-card .vip-result-tag:nth-child(2) { animation-delay: 0.5s; }
+        .loss-card .vip-result-tag:nth-child(3) { animation-delay: 0.7s; }
+
+        @keyframes tagReveal {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== AMOUNT DISPLAY ===== */
+        .vip-win-label {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #FFD700;
+            margin-bottom: 6px;
+            margin-top: 16px;
+        }
+
+        .vip-win-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 40px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #FFD700 0%, #FFF8DC 25%, #FFD700 50%, #B8860B 75%, #FFD700 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: goldShimmer 2.5s linear infinite;
+            filter: drop-shadow(0 0 12px rgba(255,215,0,0.3));
+        }
+
+        .vip-loss-amount {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 32px;
+            font-weight: 900;
+            color: #FF1744;
+            margin-bottom: 10px;
+            margin-top: 12px;
+            text-shadow: 0 0 15px rgba(255,23,68,0.3);
+        }
+
+        @keyframes goldShimmer {
+            0% { background-position: -200% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* ===== PERIOD INFO ===== */
+        .vip-period-info {
+            color: #888;
+            font-size: 12px;
+            line-height: 1.6;
+            margin-bottom: 14px;
+        }
+
+        /* ===== AUTO CLOSE ===== */
+        .vip-auto-close {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .vip-auto-close-text {
+            font-size: 11px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .vip-auto-close-text i.win-check { color: #00E676; }
+        .vip-auto-close-text i.loss-x { color: #FF1744; }
+
+        .vip-progress-track {
+            width: 80px;
+            height: 2px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 1px;
+            overflow: hidden;
+        }
+
+        .vip-progress-fill {
+            height: 100%;
+            border-radius: 1px;
+            animation: progressShrink 3s linear forwards;
+            transform-origin: left;
+        }
+        .vip-progress-fill.win-fill {
+            background: linear-gradient(90deg, #00E676, #FFD700);
+        }
+        .vip-progress-fill.loss-fill {
+            background: linear-gradient(90deg, #FF1744, #D50000);
+        }
+
+        @keyframes progressShrink {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
+        }
+
+        /* ===== ENTRANCE ANIMATIONS ===== */
+        .win-card {
+            animation: winVipEntrance 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .loss-card {
+            animation: lossVipEntrance 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        @keyframes winVipEntrance {
+            0% { opacity: 0; transform: scale(0.3) translateY(60px); filter: blur(10px); }
+            60% { opacity: 1; transform: scale(1.05) translateY(0); filter: blur(0px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
+        }
+
+        @keyframes lossVipEntrance {
+            0% { opacity: 0; transform: scale(0.8) translateY(30px); filter: blur(8px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
+        }
+
+        /* Exit animation */
+        .vip-popup-exit {
+            animation: vipExit 0.3s ease-in forwards !important;
+        }
+        @keyframes vipExit {
+            to { opacity: 0; transform: scale(0.9); filter: blur(4px); }
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 340px) {
+            .vip-popup-content { padding: 24px 16px 20px; }
+            .vip-trophy-wrap { width: 95px; height: 95px; }
+            .vip-trophy-inner { width: 68px; height: 68px; }
+            .vip-trophy-inner svg { width: 36px; height: 36px; }
+            .vip-win-amount { font-size: 32px; }
+            .vip-loss-amount { font-size: 26px; }
+            .vip-win-title { font-size: 22px; }
+            .vip-loss-title { font-size: 20px; }
+        }
 
         /* ===== SAVED ACCOUNTS SECTION ===== */
         .saved-accounts-box { background:rgba(124,77,255,0.05); border:1px solid rgba(124,77,255,0.15); border-radius:10px; padding:12px; margin-bottom:12px; }
@@ -1059,68 +1435,131 @@
         </div>
     </div>
 
-    <!-- WIN/LOSS RESULT POPUP -->
-    <div class="result-popup-overlay" id="resultPopup">
-        <div class="sparkle-container" id="sparkleContainer" style="display:none;">
-            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
-            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
-            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
-            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
-            <div class="sparkle"></div><div class="sparkle"></div><div class="sparkle"></div>
-        </div>
-        <div class="confetti-container" id="confettiContainer" style="display:none;position:absolute;inset:0;pointer-events:none;overflow:hidden;">
-            <div class="confetti-piece"></div><div class="confetti-piece"></div><div class="confetti-piece"></div>
-            <div class="confetti-piece"></div><div class="confetti-piece"></div><div class="confetti-piece"></div>
-            <div class="confetti-piece"></div><div class="confetti-piece"></div><div class="confetti-piece"></div>
-            <div class="confetti-piece"></div>
-        </div>
+    <!-- VIP WIN/LOSS RESULT POPUP -->
+    <div class="vip-result-overlay" id="resultPopup">
+        <!-- Floating particles canvas (win only) -->
+        <canvas class="vip-particles-canvas" id="vipParticlesCanvas" style="display:none;"></canvas>
 
         <!-- Win Popup -->
-        <div class="win-popup-box" id="winPopupBox" style="display:none;">
-            <div class="win-popup-top">
-                <div class="win-popup-trophy">
-                    <div class="trophy-ring"></div>
-                    <i class="fas fa-crown"></i>
+        <div class="vip-popup-card win-card" id="winPopupBox" style="display:none;">
+            <div class="vip-popup-content">
+                <!-- Trophy with rotating rings -->
+                <div class="vip-trophy-wrap">
+                    <div class="trophy-ring-1"></div>
+                    <div class="trophy-ring-2"></div>
+                    <div class="vip-trophy-inner">
+                        <!-- Crown SVG -->
+                        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="crownGrad" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#FFE55C"/>
+                                    <stop offset="50%" stop-color="#FFD700"/>
+                                    <stop offset="100%" stop-color="#B8860B"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M8 44L12 20L22 28L32 12L42 28L52 20L56 44H8Z" fill="url(#crownGrad)" stroke="#B8860B" stroke-width="1.5" stroke-linejoin="round"/>
+                            <ellipse cx="32" cy="48" rx="20" ry="4" fill="url(#crownGrad)" stroke="#B8860B" stroke-width="1"/>
+                            <circle cx="32" cy="18" r="3" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
+                            <circle cx="14" cy="24" r="2.5" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
+                            <circle cx="50" cy="24" r="2.5" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
+                            <path d="M16 38H20V42H16V38Z" fill="#7C4DFF" opacity="0.8"/>
+                            <path d="M28 38H32V42H28V38Z" fill="#7C4DFF" opacity="0.8"/>
+                            <path d="M40 38H44V42H40V38Z" fill="#7C4DFF" opacity="0.8"/>
+                        </svg>
+                    </div>
                 </div>
-                <div class="win-popup-congrats">CONGRATULATIONS</div>
-                <div class="win-lottery-row">
-                    <span class="win-lottery-label">Lottery results</span>
-                    <span class="win-lottery-tag" id="winResultColor">Red</span>
-                    <span class="win-lottery-tag" id="winResultNumber">4</span>
-                    <span class="win-lottery-tag" id="winResultSize">Small</span>
+
+                <!-- VIP WINNER Title -->
+                <div class="vip-win-title">
+                    <span class="star-icon">&#10022;</span>
+                    <span class="vip-gold-text">Z</span>
+                    <span class="vip-white-text">WINNER</span>
+                    <span class="star-icon">&#10022;</span>
                 </div>
-            </div>
-            <div class="win-popup-bottom">
-                <div class="win-bonus-label">You Won</div>
-                <div class="win-bonus-amount" id="winBonusAmount">Rs 0.00</div>
-                <div class="win-period-info" id="winPeriodInfo">Period: WinGo 30sec<br>-</div>
-                <div class="win-auto-close">
-                    <i class="fas fa-check-circle"></i>
-                    <span id="winAutoCloseText">3 seconds auto close</span>
+
+                <div class="vip-deco-line win-line"></div>
+
+                <!-- Result Tags -->
+                <div class="vip-result-row">
+                    <span class="vip-result-tag rt-color-red" id="winResultColor">Red</span>
+                    <span class="vip-result-tag rt-num" id="winResultNumber">4</span>
+                    <span class="vip-result-tag rt-size" id="winResultSize">Small</span>
+                </div>
+
+                <!-- You Won Label -->
+                <div class="vip-win-label">You Won</div>
+
+                <!-- Win Amount with shimmer -->
+                <div class="vip-win-amount" id="winBonusAmount">Rs 0.00</div>
+
+                <!-- Period Info -->
+                <div class="vip-period-info" id="winPeriodInfo">Period: WinGo 30sec<br>-</div>
+
+                <!-- Auto Close -->
+                <div class="vip-auto-close">
+                    <div class="vip-auto-close-text">
+                        <i class="fas fa-check-circle win-check"></i>
+                        <span id="winAutoCloseText">3 seconds auto close</span>
+                    </div>
+                    <div class="vip-progress-track">
+                        <div class="vip-progress-fill win-fill"></div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Loss Popup -->
-        <div class="loss-popup-box" id="lossPopupBox" style="display:none;">
-            <div class="loss-popup-top">
-                <div class="loss-popup-icon">
-                    <i class="fas fa-times"></i>
+        <div class="vip-popup-card loss-card" id="lossPopupBox" style="display:none;">
+            <div class="vip-popup-content">
+                <!-- Loss Icon with rings -->
+                <div class="vip-loss-icon-wrap">
+                    <div class="loss-bg-pulse"></div>
+                    <div class="loss-ring"></div>
+                    <div class="vip-loss-icon-inner">
+                        <!-- Shield X SVG -->
+                        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="shieldGrad" x1="32" y1="4" x2="32" y2="60" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#FF5252"/>
+                                    <stop offset="100%" stop-color="#FF1744"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M32 4L8 16V30C8 46 18.5 56.5 32 60C45.5 56.5 56 46 56 30V16L32 4Z" stroke="url(#shieldGrad)" stroke-width="3" stroke-linejoin="round" fill="none"/>
+                            <path d="M24 24L40 40M40 24L24 40" stroke="url(#shieldGrad)" stroke-width="4" stroke-linecap="round"/>
+                        </svg>
+                    </div>
                 </div>
-                <div class="loss-popup-title">YOU LOSE</div>
-                <div class="loss-popup-subtitle">Better luck next time!</div>
-            </div>
-            <div class="loss-popup-bottom">
-                <div class="loss-detail-row">
-                    <span class="loss-detail-tag" id="lossResultColor">Red</span>
-                    <span class="loss-detail-tag" id="lossResultNumber">4</span>
-                    <span class="loss-detail-tag" id="lossResultSize">Small</span>
+
+                <!-- ROUND RESULT Title -->
+                <div class="vip-loss-title">
+                    <span class="loss-muted">LOSS</span>
+                    <span class="loss-white"> RESULT</span>
                 </div>
-                <div class="loss-amount" id="lossAmount">-Rs 0.00</div>
-                <div class="loss-period-info" id="lossPeriodInfo">Period: -</div>
-                <div class="loss-auto-close">
-                    <i class="fas fa-times-circle"></i>
-                    <span id="lossAutoCloseText">3 seconds auto close</span>
+
+                <div class="vip-deco-line loss-line"></div>
+
+                <!-- Result Tags -->
+                <div class="vip-result-row">
+                    <span class="vip-result-tag rt-color-red" id="lossResultColor">Red</span>
+                    <span class="vip-result-tag rt-num" id="lossResultNumber">4</span>
+                    <span class="vip-result-tag rt-size" id="lossResultSize">Small</span>
+                </div>
+
+                <!-- Loss Amount -->
+                <div class="vip-loss-amount" id="lossAmount">-Rs 0.00</div>
+
+                <!-- Period Info -->
+                <div class="vip-period-info" id="lossPeriodInfo">Period: -</div>
+
+                <!-- Auto Close -->
+                <div class="vip-auto-close">
+                    <div class="vip-auto-close-text">
+                        <i class="fas fa-times-circle loss-x"></i>
+                        <span id="lossAutoCloseText">3 seconds auto close</span>
+                    </div>
+                    <div class="vip-progress-track">
+                        <div class="vip-progress-fill loss-fill"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2334,6 +2773,127 @@
             } catch(e) { console.error('Force history load error:', e); }
         }
 
+        // ===================== VIP PARTICLES SYSTEM =====================
+        let vipParticlesInstance = null;
+
+        class VIPParticles {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.maxParticles = 60;
+                this.colors = ['#FFD700', '#FFF8DC', '#7C4DFF', '#FFE55C', '#E8D5F7'];
+                this.rafId = null;
+                this.resize();
+                this.init();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const parent = this.canvas.parentElement;
+                this.canvas.width = parent.offsetWidth;
+                this.canvas.height = parent.offsetHeight;
+            }
+
+            init() {
+                for (let i = 0; i < this.maxParticles; i++) {
+                    this.particles.push(this.createParticle());
+                }
+                this.animate();
+            }
+
+            createParticle() {
+                return {
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: 1.2 + Math.random() * 2.8,
+                    speedY: -0.2 - Math.random() * 0.6,
+                    speedX: (Math.random() - 0.5) * 0.4,
+                    opacity: 0.15 + Math.random() * 0.5,
+                    opacitySpeed: 0.008 + Math.random() * 0.018,
+                    opacityDir: 1,
+                    color: this.colors[Math.floor(Math.random() * this.colors.length)]
+                };
+            }
+
+            animate() {
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.particles.forEach(p => {
+                    p.y += p.speedY;
+                    p.x += p.speedX + Math.sin(p.y * 0.008) * 0.25;
+
+                    p.opacity += p.opacitySpeed * p.opacityDir;
+                    if (p.opacity >= 0.75 || p.opacity <= 0.1) p.opacityDir *= -1;
+
+                    if (p.y < -10) {
+                        p.y = this.canvas.height + 10;
+                        p.x = Math.random() * this.canvas.width;
+                    }
+                    if (p.x < -10) p.x = this.canvas.width + 10;
+                    if (p.x > this.canvas.width + 10) p.x = -10;
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.opacity;
+                    this.ctx.fill();
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size * 2.2, 0, Math.PI * 2);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.globalAlpha = p.opacity * 0.1;
+                    this.ctx.fill();
+                });
+
+                this.ctx.globalAlpha = 1;
+                this.rafId = requestAnimationFrame(() => this.animate());
+            }
+
+            stop() {
+                if (this.rafId) cancelAnimationFrame(this.rafId);
+                this.rafId = null;
+                const ctx = this.canvas.getContext('2d');
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+        }
+
+        function startWinParticles() {
+            const canvas = document.getElementById('vipParticlesCanvas');
+            if (!canvas) return;
+            canvas.style.display = 'block';
+            if (vipParticlesInstance) vipParticlesInstance.stop();
+            vipParticlesInstance = new VIPParticles(canvas);
+        }
+
+        function stopWinParticles() {
+            const canvas = document.getElementById('vipParticlesCanvas');
+            if (vipParticlesInstance) vipParticlesInstance.stop();
+            if (canvas) canvas.style.display = 'none';
+        }
+
+        function fireConfetti() {
+            try {
+                if (typeof confetti === 'undefined') return;
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.58 },
+                    colors: ['#FFD700', '#7C4DFF', '#E91E63', '#00E676', '#FFF8DC'],
+                    ticks: 200,
+                    gravity: 0.8,
+                    scalar: 1.1,
+                    drift: 0,
+                    disableForReducedMotion: true
+                });
+                setTimeout(() => {
+                    confetti({ particleCount: 80, angle: 60, spread: 55, origin: { x: 0, y: 0.65 }, colors: ['#FFD700', '#FFF8DC'] });
+                    confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.65 }, colors: ['#FFD700', '#FFF8DC'] });
+                }, 200);
+            } catch(e) { console.log('Confetti error:', e); }
+        }
+
         // ===================== WIN/LOSS RESULT POPUP =====================
         function listenForBetResults() {
             if(!currentUser) return;
@@ -2353,8 +2913,6 @@
             const popup = document.getElementById('resultPopup');
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
-            const sparkleContainer = document.getElementById('sparkleContainer');
-            const confettiContainer = document.getElementById('confettiContainer');
 
             let resultNum = bet.result !== undefined ? bet.result : '?';
             let resultColor = bet.resultColor || 'Green';
@@ -2370,24 +2928,38 @@
                 }
             } catch(e) { console.error('Error fetching result for popup:', e); }
 
+            // Cancel any existing popup timer
             if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
 
-            if(bet.win === true) {
-                winBox.style.display = 'block';
-                lossBox.style.display = 'none';
-                sparkleContainer.style.display = 'block';
-                confettiContainer.style.display = 'block';
+            // Reset animations by removing/re-adding animation classes
+            winBox.style.display = 'none';
+            lossBox.style.display = 'none';
 
+            if(bet.win === true) {
+                // Show and animate win popup
+                winBox.style.display = 'block';
+                winBox.classList.remove('vip-popup-exit');
+                // Re-trigger entrance animation
+                winBox.style.animation = 'none';
+                winBox.offsetHeight; // force reflow
+                winBox.style.animation = '';
+
+                // Update result tags
                 const colorTag = document.getElementById('winResultColor');
                 colorTag.textContent = resultColor;
-                let colorClass = 'red';
-                if(resultColor === 'Green') colorClass = 'green';
-                else if(resultColor === 'Violet') colorClass = 'violet';
-                colorTag.className = 'win-lottery-tag ' + colorClass;
+                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
                 document.getElementById('winResultNumber').textContent = resultNum;
                 document.getElementById('winResultSize').textContent = resultSize;
                 document.getElementById('winBonusAmount').textContent = 'Rs ' + (bet.winAmount || 0).toFixed(2);
                 document.getElementById('winPeriodInfo').innerHTML = 'Period: WinGo 30sec<br>' + (bet.period || '-');
+
+                // Reset progress bar
+                const winFill = winBox.querySelector('.vip-progress-fill');
+                if (winFill) {
+                    winFill.style.animation = 'none';
+                    winFill.offsetHeight;
+                    winFill.style.animation = '';
+                }
 
                 let count = 3;
                 document.getElementById('winAutoCloseText').textContent = count + ' seconds auto close';
@@ -2396,23 +2968,36 @@
                     if(count <= 0) clearInterval(countdown);
                     else document.getElementById('winAutoCloseText').textContent = count + ' seconds auto close';
                 }, 1000);
+
+                // VIP effects
+                startWinParticles();
+                setTimeout(() => fireConfetti(), 100);
                 playWinSound();
             } else {
-                winBox.style.display = 'none';
+                // Show and animate loss popup
                 lossBox.style.display = 'block';
-                sparkleContainer.style.display = 'none';
-                confettiContainer.style.display = 'none';
+                lossBox.classList.remove('vip-popup-exit');
+                // Re-trigger entrance animation
+                lossBox.style.animation = 'none';
+                lossBox.offsetHeight; // force reflow
+                lossBox.style.animation = '';
 
+                // Update result tags
                 const colorTag = document.getElementById('lossResultColor');
                 colorTag.textContent = resultColor;
-                let lossColorHex = '#FF1744';
-                if(resultColor === 'Green') lossColorHex = '#00E676';
-                else if(resultColor === 'Violet') lossColorHex = '#7C4DFF';
-                colorTag.style.background = lossColorHex;
+                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
                 document.getElementById('lossResultNumber').textContent = resultNum;
                 document.getElementById('lossResultSize').textContent = resultSize;
                 document.getElementById('lossAmount').textContent = '-Rs ' + (bet.amount || 0).toFixed(2);
                 document.getElementById('lossPeriodInfo').textContent = 'Period: ' + (bet.period || '-');
+
+                // Reset progress bar
+                const lossFill = lossBox.querySelector('.vip-progress-fill');
+                if (lossFill) {
+                    lossFill.style.animation = 'none';
+                    lossFill.offsetHeight;
+                    lossFill.style.animation = '';
+                }
 
                 let count = 3;
                 document.getElementById('lossAutoCloseText').textContent = count + ' seconds auto close';
@@ -2421,6 +3006,8 @@
                     if(count <= 0) clearInterval(countdown);
                     else document.getElementById('lossAutoCloseText').textContent = count + ' seconds auto close';
                 }, 1000);
+
+                stopWinParticles();
                 playLoseSound();
             }
 
@@ -2429,12 +3016,29 @@
         }
 
         function closeResultPopup() {
-            document.getElementById('resultPopup').classList.remove('active');
-            document.getElementById('winPopupBox').style.display = 'none';
-            document.getElementById('lossPopupBox').style.display = 'none';
-            document.getElementById('sparkleContainer').style.display = 'none';
-            document.getElementById('confettiContainer').style.display = 'none';
-            if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
+            const popup = document.getElementById('resultPopup');
+            const winBox = document.getElementById('winPopupBox');
+            const lossBox = document.getElementById('lossPopupBox');
+
+            // Add exit animation
+            const activeBox = winBox.style.display !== 'none' ? winBox : lossBox;
+            if (activeBox && activeBox.style.display !== 'none') {
+                activeBox.classList.add('vip-popup-exit');
+            }
+
+            // Fade overlay
+            popup.style.opacity = '0';
+
+            setTimeout(() => {
+                popup.classList.remove('active');
+                popup.style.opacity = '';
+                winBox.style.display = 'none';
+                lossBox.style.display = 'none';
+                winBox.classList.remove('vip-popup-exit');
+                lossBox.classList.remove('vip-popup-exit');
+                stopWinParticles();
+                if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
+            }, 280);
         }
 
         document.getElementById('resultPopup').addEventListener('click', function(e) {
@@ -2525,28 +3129,52 @@
             const btn = document.getElementById('confirmBetBtn');
             if(btn.disabled) return;
             btn.disabled = true;
-            btn.textContent = 'Processing...';
+            btn.textContent = 'Placing...';
+
             try {
-                const balanceRef = db.ref('users/' + currentUser.uid + '/balance');
-                const balanceSnap = await balanceRef.once('value');
-                const currentBalance = Number(balanceSnap.val()) || 0;
-                if(currentBalance < finalAmount) return toast('Insufficient balance!');
+                // INSTANT: Deduct balance locally first for instant feel, then sync to Firebase
+                userData.balance = (userData.balance || 0) - finalAmount;
+                updateWalletUI();
 
-                await balanceRef.set(currentBalance - finalAmount);
-                const totalBetRef = db.ref('users/' + currentUser.uid + '/totalBetAmount');
-                const totalBetSnap = await totalBetRef.once('value');
-                await totalBetRef.set((Number(totalBetSnap.val()) || 0) + finalAmount);
-
-                const betRef = await db.ref('bets/' + betPeriod).push(betData);
-                await db.ref('userBets/' + currentUser.uid + '/' + betRef.key).set(betData);
-
-                await loadUserData();
+                // INSTANT: Show success immediately, don't wait for Firebase
                 toast('Bet placed! Rs ' + finalAmount + ' (X' + currentMultiplier + ')');
+                closeBetPopup();
+
+                // INSTANT: All Firebase operations in parallel (no sequential awaits)
+                const balanceRef = db.ref('users/' + currentUser.uid + '/balance');
+                const totalBetRef = db.ref('users/' + currentUser.uid + '/totalBetAmount');
+
+                const [balanceSnap, totalBetSnap] = await Promise.all([
+                    balanceRef.once('value'),
+                    totalBetRef.once('value')
+                ]);
+
+                const currentBalance = Number(balanceSnap.val()) || 0;
+                if(currentBalance < finalAmount) {
+                    // Revert local balance if insufficient
+                    userData.balance = currentBalance;
+                    updateWalletUI();
+                    toast('Insufficient balance!');
+                    return;
+                }
+
+                // INSTANT: All writes happen in parallel
+                const newBetRef = db.ref('bets/' + betPeriod).push();
+                await Promise.all([
+                    balanceRef.set(currentBalance - finalAmount),
+                    totalBetRef.set((Number(totalBetSnap.val()) || 0) + finalAmount),
+                    newBetRef.set(betData),
+                    db.ref('userBets/' + currentUser.uid + '/' + newBetRef.key).set(betData)
+                ]);
+
+                // Background: Refresh user data without blocking UI
+                loadUserData();
             } catch(e) {
                 console.error('Bet error:', e);
                 toast('Failed to place bet: ' + e.message);
+                // Revert local balance on error
+                await loadUserData();
             } finally {
-                closeBetPopup();
                 btn.disabled = false;
                 btn.textContent = 'Confirm Bet';
             }
