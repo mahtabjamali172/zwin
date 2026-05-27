@@ -135,15 +135,18 @@
         .color-btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.4); }
         .color-btn:active { transform:scale(0.95); }
 
-        /* ===== NUMBER GRID - BALL STYLE ===== */
+        /* ===== NUMBER GRID - 3D GLOSSY BILLIARD BALL STYLE ===== */
         .number-section { margin:0 12px 10px; }
-        .number-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:10px; }
-        .num-btn { aspect-ratio:1; border-radius:50%; border:none; font-size:16px; font-weight:800; cursor:pointer; color:#fff; display:flex; align-items:center; justify-content:center; position:relative; transition:all 0.3s; box-shadow:0 3px 8px rgba(0,0,0,0.3); }
-        .num-btn:hover { transform:scale(1.08); }
+        .number-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:10px; padding:10px; background:#0d0d0d; border-radius:14px; }
+        .num-btn { aspect-ratio:1; border-radius:50%; border:none; font-size:18px; font-weight:800; cursor:pointer; color:#fff; display:flex; align-items:center; justify-content:center; position:relative; transition:all 0.3s; box-shadow:0 4px 10px rgba(0,0,0,0.5), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); text-shadow:0 1px 3px rgba(0,0,0,0.5); }
+        .num-btn:hover { transform:scale(1.1); filter:brightness(1.15); }
         .num-btn:active { transform:scale(0.92); }
-        .n-green { background:linear-gradient(135deg,#00E676,#00C853); box-shadow:inset 0 0 8px rgba(0,230,118,0.3),0 3px 8px rgba(0,200,83,0.3); }
-        .n-red { background:linear-gradient(135deg,#FF1744,#D50000); box-shadow:inset 0 0 8px rgba(255,23,68,0.3),0 3px 8px rgba(213,0,0,0.3); }
-        .n-violet { background:linear-gradient(135deg,#7C4DFF,#651FFF); box-shadow:inset 0 0 8px rgba(124,77,255,0.3),0 3px 8px rgba(101,31,255,0.3); }
+        /* 3D glossy highlight on all balls */
+        .num-btn::before { content:''; position:absolute; top:12%; left:15%; width:35%; height:30%; border-radius:50%; background:radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.7), rgba(255,255,255,0.15) 60%, transparent 70%); pointer-events:none; }
+        .num-btn::after { content:''; position:absolute; bottom:8%; right:12%; width:25%; height:20%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(255,255,255,0.15), transparent 70%); pointer-events:none; }
+        .n-green { background:radial-gradient(circle at 35% 35%, #00E676 0%, #00C853 40%, #009624 100%); box-shadow:0 4px 12px rgba(0,200,83,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(0,230,118,0.5); }
+        .n-red { background:radial-gradient(circle at 35% 35%, #FF5252 0%, #FF1744 40%, #B71C1C 100%); box-shadow:0 4px 12px rgba(255,23,68,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(255,82,82,0.5); }
+        .n-violet { background:radial-gradient(circle at 35% 35%, #B388FF 0%, #7C4DFF 40%, #4527A0 100%); box-shadow:0 4px 12px rgba(124,77,255,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(179,136,255,0.5); }
 
         /* ===== MULTIPLIER BUTTONS ===== */
         .multiplier-btns { display:flex; gap:6px; margin-bottom:10px; }
@@ -201,15 +204,40 @@
         }
         @keyframes lockPulse { 0%,100%{box-shadow:0 0 20px rgba(255,23,68,0.5),0 0 40px rgba(255,23,68,0.2)} 50%{box-shadow:0 0 30px rgba(255,23,68,0.7),0 0 60px rgba(255,23,68,0.3)} }
         .bet-lock-countdown {
-            font-size:85px;
-            font-weight:900;
-            color:#FFD700;
-            font-family:'JetBrains Mono',monospace;
-            text-shadow:0 0 20px rgba(255,215,0,0.5),0 0 40px rgba(255,23,68,0.3);
-            line-height:1;
-            animation:countdownPulse 0.8s ease-in-out infinite;
+            display:flex;
+            gap:16px;
+            align-items:center;
+            justify-content:center;
         }
-        @keyframes countdownPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+        .countdown-card {
+            background:#000;
+            border-radius:16px;
+            padding:14px 22px;
+            min-width:110px;
+            height:140px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            box-shadow:0 6px 30px rgba(0,0,0,0.6), inset 0 0 20px rgba(0,200,83,0.15);
+            border:2px solid rgba(0,200,83,0.4);
+        }
+        .countdown-card span {
+            font-size:90px;
+            font-weight:900;
+            color:#00E676;
+            font-family:'JetBrains Mono',monospace;
+            line-height:1;
+            text-shadow:0 0 20px rgba(0,230,118,0.4);
+        }
+        .countdown-sep {
+            font-size:60px;
+            font-weight:900;
+            color:#fff;
+            font-family:'JetBrains Mono',monospace;
+            line-height:1;
+            text-shadow:0 2px 8px rgba(0,0,0,0.5);
+        }
+        @keyframes countdownPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
         .bet-lock-text {
             font-size:20px;
             font-weight:800;
@@ -225,17 +253,34 @@
         }
 
         /* ===== HISTORY TABLE ===== */
-        .history-section { background:linear-gradient(135deg,#111,#1a0a2e); margin:0 12px 80px; border-radius:12px; padding:12px; border:1px solid rgba(124,77,255,0.15); }
-        .history-tabs { display:flex; gap:8px; margin-bottom:10px; }
+        .history-section { background:linear-gradient(135deg,#111,#1a0a2e); margin:0 12px 80px; border-radius:12px; padding:10px; border:1px solid rgba(124,77,255,0.15); }
+        .section-title { font-size:14px; font-weight:700; color:#FFD700; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+        .history-tabs { display:flex; gap:8px; margin-bottom:8px; }
         .hist-tab { flex:1; padding:6px; border-radius:6px; border:none; font-size:11px; font-weight:600; cursor:pointer; text-align:center; background:#1a1a1a; color:#888; border:1px solid rgba(124,77,255,0.15); transition:all 0.3s; }
         .hist-tab.active { background:linear-gradient(135deg,#FFD700,#FFA000); color:#000; }
-        .hist-table { width:100%; border-collapse:collapse; font-size:11px; }
-        .hist-table th { padding:6px 3px; color:#7C4DFF; font-weight:600; text-align:center; border-bottom:1px solid rgba(124,77,255,0.2); }
-        .hist-table td { padding:6px 3px; text-align:center; border-bottom:1px solid rgba(124,77,255,0.08); color:#ccc; }
-        .hist-ball { width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; }
-        .hist-bs { font-weight:600; }
+        .hist-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .hist-table th { padding:6px 3px; color:#7C4DFF; font-weight:700; text-align:center; border-bottom:2px solid rgba(124,77,255,0.2); font-size:12px; }
+        .hist-table td { padding:5px 3px; text-align:center; border-bottom:1px solid rgba(124,77,255,0.08); color:#ccc; }
+        .hist-table td.period-cell { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:#FFD700; letter-spacing:0.5px; }
+        /* History colored balls in number column */
+        .hist-ball { width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; color:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.25); text-shadow:0 1px 2px rgba(0,0,0,0.5); position:relative; }
+        .hist-ball::before { content:''; position:absolute; top:12%; left:15%; width:35%; height:30%; border-radius:50%; background:radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.6), rgba(255,255,255,0.1) 60%, transparent 70%); pointer-events:none; }
+        .hist-ball.hist-green { background:radial-gradient(circle at 35% 35%, #00E676 0%, #00C853 40%, #009624 100%); }
+        .hist-ball.hist-red { background:radial-gradient(circle at 35% 35%, #FF5252 0%, #FF1744 40%, #B71C1C 100%); }
+        .hist-ball.hist-violet { background:radial-gradient(circle at 35% 35%, #B388FF 0%, #7C4DFF 40%, #4527A0 100%); }
+        .hist-ball.hist-red-violet { background:radial-gradient(circle at 35% 35%, #E040FB 0%, #7C4DFF 30%, #FF1744 70%, #B71C1C 100%); }
+        .hist-num { font-size:16px; font-weight:800; font-family:'JetBrains Mono',monospace; }
+        .hist-num.green { color:#00E676; }
+        .hist-num.red { color:#FF1744; }
+        .hist-num.violet { color:#7C4DFF; }
+        .hist-bs { font-size:13px; font-weight:700; }
         .hist-bs.big { color:#FF9800; }
         .hist-bs.small { color:#448AFF; }
+        .hist-color-dot { width:14px; height:14px; border-radius:50%; display:inline-block; box-shadow:0 1px 4px rgba(0,0,0,0.3); }
+        .hist-color-dot.green { background:linear-gradient(135deg,#00E676,#00C853); }
+        .hist-color-dot.red { background:linear-gradient(135deg,#FF1744,#D50000); }
+        .hist-color-dot.violet { background:linear-gradient(135deg,#7C4DFF,#651FFF); }
+        .hist-color-dot.red-violet { background: linear-gradient(135deg, #FF1744 50%, #7C4DFF 50%); }
 
         /* ===== BET POPUP ===== */
         .popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; display:none; align-items:flex-end; justify-content:center; backdrop-filter:blur(4px); }
@@ -1009,7 +1054,11 @@
                 <!-- Lock Overlay - shown when betting is closed (last 5 seconds) -->
                 <div class="bet-lock-overlay" id="betLockOverlay">
                     <div class="bet-lock-content">
-                        <div class="bet-lock-countdown" id="betLockCountdown">5</div>
+                        <div class="bet-lock-countdown" id="betLockCountdown">
+                            <div class="countdown-card"><span id="cdCard1">0</span></div>
+                            <span class="countdown-sep"> </span>
+                            <div class="countdown-card"><span id="cdCard2">5</span></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1036,21 +1085,11 @@
                         <button class="num-btn n-green" onclick="openBetPopup('9','number',9,9)">9</button>
                     </div>
 
-                    <!-- Multiplier Buttons (X1, X5, X10, X20, X50, X100) -->
-                    <div class="multiplier-btns">
-                        <button class="multi-btn active" onclick="selectMultiplier(this)">X1</button>
-                        <button class="multi-btn" onclick="selectMultiplier(this)">X5</button>
-                        <button class="multi-btn" onclick="selectMultiplier(this)">X10</button>
-                        <button class="multi-btn" onclick="selectMultiplier(this)">X20</button>
-                        <button class="multi-btn" onclick="selectMultiplier(this)">X50</button>
-                        <button class="multi-btn" onclick="selectMultiplier(this)">X100</button>
+                    <!-- Big Small Buttons - directly under number balls -->
+                    <div class="bs-btns" style="margin:10px 0 0 0;">
+                        <button class="bs-btn big-btn" onclick="openBetPopup('Big','bs','big',2)">Big</button>
+                        <button class="bs-btn small-btn" onclick="openBetPopup('Small','bs','small',2)">Small</button>
                     </div>
-                </div>
-
-                <!-- Big Small Buttons -->
-                <div class="bs-btns">
-                    <button class="bs-btn big-btn" onclick="openBetPopup('Big','bs','big',2)">Big</button>
-                    <button class="bs-btn small-btn" onclick="openBetPopup('Small','bs','small',2)">Small</button>
                 </div>
             </div>
 
@@ -1058,8 +1097,8 @@
             <div class="history-section">
                 <div class="section-title"><i class="fas fa-history" style="color:#FFD700;"></i> Result History</div>
                 <table class="hist-table" id="historyTable">
-                    <thead><tr><th>Period</th><th>Result</th><th>No</th><th>Color</th><th>Size</th></tr></thead>
-                    <tbody id="historyBody"><tr><td colspan="5" style="color:#888;">Loading...</td></tr></tbody>
+                    <thead><tr><th>Period</th><th>Number</th><th>Big Small</th><th>Color</th></tr></thead>
+                    <tbody id="historyBody"><tr><td colspan="4" style="color:#888;">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -2574,15 +2613,21 @@
 
         function updateBetLockOverlay(remaining) {
             const overlay = document.getElementById('betLockOverlay');
-            const countdown = document.getElementById('betLockCountdown');
-            if(!overlay || !countdown) return;
+            const cdCard1 = document.getElementById('cdCard1');
+            const cdCard2 = document.getElementById('cdCard2');
+            if(!overlay || !cdCard1 || !cdCard2) return;
             if(remaining <= 4) {
                 overlay.classList.add('active');
-                countdown.textContent = remaining;
-                // Color shift: red for 1-2, orange for 3, yellow for 4
-                if(remaining <= 2) countdown.style.color = '#FF1744';
-                else if(remaining === 3) countdown.style.color = '#FF9800';
-                else countdown.style.color = '#FFD700';
+                const tens = Math.floor(remaining / 10);
+                const ones = remaining % 10;
+                cdCard1.textContent = tens;
+                cdCard2.textContent = ones;
+                // Color shift for number inside cards
+                const cards = document.querySelectorAll('.countdown-card span');
+                let cardColor = '#00C853';
+                if(remaining <= 2) cardColor = '#FF1744';
+                else if(remaining === 3) cardColor = '#FF9800';
+                cards.forEach(c => c.style.color = cardColor);
             } else {
                 overlay.classList.remove('active');
             }
@@ -2747,8 +2792,19 @@
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
                     let result = resultSnap.val();
 
-                    // If no result exists yet, skip and let processGameResult handle it
-                    if(!result) continue;
+                    // If no result exists, calculate and save one
+                    if(!result) {
+                        const num = Math.floor(Math.random() * 10);
+                        const color = getNumberColor(num);
+                        result = {
+                            period: bet.period,
+                            number: num,
+                            color: color,
+                            size: num >= 5 ? 'Big' : 'Small',
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        };
+                        await db.ref('game/results/' + bet.period).set(result);
+                    }
 
                     // Process this individual bet
                     await processSingleBet(betId, bet, result);
@@ -2833,21 +2889,31 @@
                         tbody.innerHTML = '';
                         list.slice(0, 10).forEach(([period, r]) => {
                             const tr = document.createElement('tr');
-                            let ballCls = 'ball-red';
-                            let colorHex = '#FF1744';
-                            if(r.color === 'Green') { ballCls = 'ball-green'; colorHex = '#00E676'; }
-                            else if(r.color === 'Violet') { ballCls = 'ball-violet'; colorHex = '#7C4DFF'; }
+                            const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
                             const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
-                            const shortPeriod = period.length > 6 ? period.slice(-9) : period;
-                            tr.innerHTML = '<td style="font-family:monospace;font-size:11px;">' + shortPeriod + '</td>' +
-                                '<td><span class="hist-ball ' + ballCls + '">' + r.number + '</span></td>' +
-                                '<td>' + r.number + '</td>' +
-                                '<td style="color:' + colorHex + ';font-weight:700;">' + r.color + '</td>' +
-                                '<td class="' + bsCls + '">' + r.size + '</td>';
+                            // Color dot class
+                            let dotCls = 'hist-color-dot red';
+                            if(r.color === 'Green') dotCls = 'hist-color-dot green';
+                            else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
+                            // Handle numbers 0 and 5 which are Red+Violet
+                            if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
+                            if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
+                            // Colored ball for number
+                            let ballCls = 'hist-ball';
+                            if(numCls.includes('green')) ballCls += ' hist-green';
+                            else if(numCls.includes('violet')) {
+                                if(r.number == 0 || r.number == 5) ballCls += ' hist-red-violet';
+                                else ballCls += ' hist-violet';
+                            }
+                            else ballCls += ' hist-red';
+                            tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
+                                '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
+                                '<td class="' + bsCls + '">' + r.size + '</td>' +
+                                '<td><span class="' + dotCls + '"></span></td>';
                             tbody.appendChild(tr);
                         });
                         if(list.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;">No results yet</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
                         }
                     }
 
@@ -2895,21 +2961,29 @@
                     tbody.innerHTML = '';
                     list.slice(0, 10).forEach(([period, r]) => {
                         const tr = document.createElement('tr');
-                        let ballCls = 'ball-red';
-                        let colorHex = '#FF1744';
-                        if(r.color === 'Green') { ballCls = 'ball-green'; colorHex = '#00E676'; }
-                        else if(r.color === 'Violet') { ballCls = 'ball-violet'; colorHex = '#7C4DFF'; }
+                        const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
                         const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
-                        const shortPeriod = period.length > 6 ? period.slice(-9) : period;
-                        tr.innerHTML = '<td style="font-family:monospace;font-size:11px;">' + shortPeriod + '</td>' +
-                            '<td><span class="hist-ball ' + ballCls + '">' + r.number + '</span></td>' +
-                            '<td>' + r.number + '</td>' +
-                            '<td style="color:' + colorHex + ';font-weight:700;">' + r.color + '</td>' +
-                            '<td class="' + bsCls + '">' + r.size + '</td>';
+                        let dotCls = 'hist-color-dot red';
+                        if(r.color === 'Green') dotCls = 'hist-color-dot green';
+                        else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
+                        if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
+                        if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
+                        // Colored ball for number
+                        let ballCls = 'hist-ball';
+                        if(numCls.includes('green')) ballCls += ' hist-green';
+                        else if(numCls.includes('violet')) {
+                            if(r.number == 0 || r.number == 5) ballCls += ' hist-red-violet';
+                            else ballCls += ' hist-violet';
+                        }
+                        else ballCls += ' hist-red';
+                        tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
+                            '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
+                            '<td class="' + bsCls + '">' + r.size + '</td>' +
+                            '<td><span class="' + dotCls + '"></span></td>';
                         tbody.appendChild(tr);
                     });
                     if(list.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;">No results yet</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
                     }
                 }
             } catch(e) { console.error('Force history load error:', e); }
@@ -3484,8 +3558,10 @@
                 const div = document.createElement('div');
                 div.className = 'trans-item';
                 const stCls = t.status === 'approved' ? 'status-approved' : t.status === 'rejected' ? 'status-rejected' : 'status-pending';
+                const dateStr = t.timestamp ? new Date(t.timestamp).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '-';
                 div.innerHTML = '<div class="trans-info"><div class="trans-type">' + (type === 'deposit' ? 'Deposit' : 'Withdraw') + ' via ' + t.method + '</div>' +
-                    '<div class="trans-method">' + t.account + ' | Trx: ' + (t.trxId || '-') + '</div></div>' +
+                    '<div class="trans-method">' + t.account + (type === 'deposit' ? ' | Trx: ' + (t.trxId || '-') : ' | ' + (t.accountName || '')) + '</div>' +
+                    '<div class="trans-method" style="color:#666;font-size:10px;margin-top:3px;"><i class="far fa-clock"></i> ' + dateStr + '</div></div>' +
                     '<div style="text-align:right;"><div class="trans-status ' + stCls + '">' + t.status.toUpperCase() + '</div>' +
                     '<div class="trans-amount">Rs ' + t.amount + '</div></div>';
                 container.appendChild(div);
