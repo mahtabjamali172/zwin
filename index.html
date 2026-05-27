@@ -2763,8 +2763,8 @@
                     } else if(bet.betType === 'number') {
                         if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                     } else if(bet.betType === 'bs') {
-                        if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
-                        else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
+                        if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
+                        else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
                     }
 
                     await betRef.update({ win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
@@ -2835,8 +2835,8 @@
                 } else if(bet.betType === 'number') {
                     if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                 } else if(bet.betType === 'bs') {
-                    if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
-                    else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
+                    if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
                 }
 
                 const updates = {
@@ -3473,23 +3473,52 @@
             } catch(e) { toast('Error: ' + e.message); }
         }
 
-        async function submitWithdraw() {
-            const account = document.getElementById('wdAccount').value.trim();
-            const name = document.getElementById('wdName').value.trim();
-            const amount = parseInt(document.getElementById('wdAmount').value);
-            const balance = userData ? (userData.balance || 0) : 0;
-            const totalDeposited = userData ? (userData.totalDeposited || 0) : 0;
-            const totalBetAmount = userData ? (userData.totalBetAmount || 0) : 0;
+        let isWithdrawSubmitting = false;
 
-            if(totalBetAmount < totalDeposited) {
-                const remaining = totalDeposited - totalBetAmount;
-                return toast('Bet remaining: Rs ' + remaining.toFixed(2) + '. Bet full deposit first.');
-            }
-            if(!account || !amount || amount < adminMinWithdraw) return toast('Min withdrawal Rs ' + adminMinWithdraw);
-            if(!name) return toast('Enter account holder name');
-            if(amount > balance) return toast('Insufficient balance!');
+        async function submitWithdraw() {
+            if(isWithdrawSubmitting) return;
+            isWithdrawSubmitting = true;
+
+            const submitBtn = document.querySelector('#withdrawPopup .dw-submit');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
             try {
+                const account = document.getElementById('wdAccount').value.trim();
+                const name = document.getElementById('wdName').value.trim();
+                const amount = parseInt(document.getElementById('wdAmount').value);
+                const balance = userData ? (userData.balance || 0) : 0;
+                const totalDeposited = userData ? (userData.totalDeposited || 0) : 0;
+                const totalBetAmount = userData ? (userData.totalBetAmount || 0) : 0;
+
+                if(totalBetAmount < totalDeposited) {
+                    const remaining = totalDeposited - totalBetAmount;
+                    toast('Bet remaining: Rs ' + remaining.toFixed(2) + '. Bet full deposit first.');
+                    return;
+                }
+                if(!account || !amount || amount < adminMinWithdraw) {
+                    toast('Min withdrawal Rs ' + adminMinWithdraw);
+                    return;
+                }
+                if(!name) {
+                    toast('Enter account holder name');
+                    return;
+                }
+                if(amount > balance) {
+                    toast('Insufficient balance!');
+                    return;
+                }
+
+                // Check if user already has a pending withdrawal
+                const pendingSnap = await db.ref('withdrawals').orderByChild('userId').equalTo(currentUser.uid).once('value');
+                const allWithdrawals = pendingSnap.val() || {};
+                const hasPending = Object.values(allWithdrawals).some(w => w.status === 'pending');
+                if(hasPending) {
+                    toast('You already have a pending withdrawal. Please wait for approval.');
+                    return;
+                }
+
                 await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (b || 0) - amount);
                 await db.ref('users/' + currentUser.uid + '/totalWithdrawn').transaction(w => (w || 0) + amount);
                 await db.ref('withdrawals').push({
@@ -3503,7 +3532,13 @@
                 document.getElementById('wdAmount').value = '';
                 loadUserData();
                 toast('Withdrawal request submitted!');
-            } catch(e) { toast('Error: ' + e.message); }
+            } catch(e) {
+                toast('Error: ' + e.message);
+            } finally {
+                isWithdrawSubmitting = false;
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            }
         }
 
         // ===================== Transactions Page =====================
