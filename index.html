@@ -2817,7 +2817,7 @@
                 const bets = betsSnap.val() || {};
                 const resultNum = parseInt(result.number);
                 const resultColor = (result.color || '').toString();
-                const resultSize = (result.size || '').toString().toLowerCase();
+                const resultSize = (result.size || '').toString();
 
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed) continue;
@@ -2901,7 +2901,7 @@
             try {
                 const resultNum = parseInt(result.number);
                 const resultColor = (result.color || '').toString();
-                const resultSize = (result.size || '').toString().toLowerCase();
+                const resultSize = (result.size || '').toString();
                 const selection = (bet.selection || '').toString().toLowerCase();
 
                 let win = false;
