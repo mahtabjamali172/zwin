@@ -1014,7 +1014,7 @@
             <div class="notice-bar">
                 <i class="fas fa-volume-up"></i>
                 <div class="notice-text" style="overflow:hidden;position:relative;white-space:nowrap;">
-                    <span id="announcementMarquee" style="display:inline-block;animation:scrollText 15s linear infinite;padding-left:100%;">Welcome to Zwin ! "For a short time, Easypaisa and JazzCash are under maintenance. Therefore, you can easily make a deposit using the TID number."</span>
+                    <span id="announcementMarquee" style="display:inline-block;animation:scrollText 15s linear infinite;padding-left:100%;">Welcome to Zwin ! “For a short time, Easypaisa and JazzCash are under maintenance. Therefore, you can easily make a deposit using the TID number.”</span>
                 </div>
             </div>
 
@@ -1633,7 +1633,7 @@
         let dwMethod = 'easypaisa';
         let addAccMethod = 'easypaisa';
         let lastTimerValue = -1;
-        let shownResults = new Set();
+        let shownResults = {};
         let adminSettings = {};
         let currentGameMode = 'random';
         let resultPopupTimer = null;
@@ -1641,12 +1641,6 @@
         let savedAccounts = [];
         let isOnline = true;
         let timerSynced = false;
-        // FIX #1: Track pending balance deductions to prevent double deduction
-        let pendingBalanceDeductions = new Map();
-        // FIX #2: Track processing periods to prevent duplicate processing
-        let processingPeriods = new Set();
-        // FIX #3: Bet placement lock to prevent race conditions
-        let isPlacingBet = false;
 
         // ===================== Listener Ref Variables (for cleanup) =====================
         let historyQueryRef = null;
@@ -1661,32 +1655,111 @@
         // ===================== Cleanup All Listeners =====================
         function cleanupAllListeners() {
             try {
-                if (historyQueryRef) { historyQueryRef.off('value'); historyQueryRef = null; }
+                // Remove shown results listener
+                if(shownResultsListener && shownResultsRef) {
+                    shownResultsRef.off('value', shownResultsListener);
+                    shownResultsListener = null;
+                    shownResultsRef = null;
+                }
+                // Remove history listener
+                if (historyQueryRef) {
+                    historyQueryRef.off('value');
+                    historyQueryRef = null;
+                }
                 historyListenerActive = false;
-                if (betResultsQueryRef) { betResultsQueryRef.off('value'); betResultsQueryRef = null; }
-                if (announcementRef) { announcementRef.off('value'); announcementRef = null; }
-                if (gameModeRef) { gameModeRef.off('value'); gameModeRef = null; }
-                if (notifQueryRef) { notifQueryRef.off('value'); notifQueryRef = null; }
-                if (minDepositRef) { minDepositRef.off('value'); minDepositRef = null; }
-                if (minWithdrawRef) { minWithdrawRef.off('value'); minWithdrawRef = null; }
-            } catch(e) { console.error('[Cleanup] Error:', e); }
+
+                // Remove bet results listener
+                if (betResultsQueryRef) {
+                    betResultsQueryRef.off('value');
+                    betResultsQueryRef = null;
+                }
+
+                // Remove announcement listener
+                if (announcementRef) {
+                    announcementRef.off('value');
+                    announcementRef = null;
+                }
+
+                // Remove game mode listener
+                if (gameModeRef) {
+                    gameModeRef.off('value');
+                    gameModeRef = null;
+                }
+
+                // Remove notifications listener
+                if (notifQueryRef) {
+                    notifQueryRef.off('value');
+                    notifQueryRef = null;
+                }
+
+                // Remove min deposit listener
+                if (minDepositRef) {
+                    minDepositRef.off('value');
+                    minDepositRef = null;
+                }
+
+                // Remove min withdraw listener
+                if (minWithdrawRef) {
+                    minWithdrawRef.off('value');
+                    minWithdrawRef = null;
+                }
+
+                console.log('[Cleanup] All Firebase listeners removed successfully');
+            } catch(e) {
+                console.error('[Cleanup] Error removing listeners:', e);
+            }
         }
 
-        function loadShownResults() {
-            try {
-                const stored = localStorage.getItem('zwin_shown_results_v2');
-                if(stored) { const arr = JSON.parse(stored); arr.forEach(id => shownResults.add(id)); }
-            } catch(e) {}
-        }
-        function saveShownResults() {
-            try {
-                const arr = [...shownResults];
-                if(arr.length > 50) arr.splice(0, arr.length - 50);
-                localStorage.setItem('zwin_shown_results_v2', JSON.stringify(arr));
-            } catch(e) {}
+        // Firebase-based shown results tracking - uses Firebase only
+        let shownResultsRef = null;
+        let shownResultsListener = null;
+
+        function initShownResultsListener() {
+            if(!currentUser) return;
+            // Remove old listener
+            if(shownResultsListener) {
+                shownResultsRef.off('value', shownResultsListener);
+                shownResultsListener = null;
+            }
+            shownResultsRef = db.ref('shownResults/' + currentUser.uid);
+            shownResultsListener = shownResultsRef.on('value', snap => {
+                const data = snap.val() || {};
+                shownResults = data;
+            });
         }
 
+        async function loadShownResults() {
+            if(!currentUser) {
+                shownResults = {};
+                return;
+            }
+            try {
+                const snap = await db.ref('shownResults/' + currentUser.uid).once('value');
+                shownResults = snap.val() || {};
+            } catch(e) {
+                shownResults = {};
+            }
+        }
+
+        async function saveShownResults() {
+            if(!currentUser) return;
+            try {
+                // Keep only last 50 entries to prevent storage bloat
+                const keys = Object.keys(shownResults);
+                if(keys.length > 50) {
+                    const sortedKeys = keys.sort();
+                    const toDelete = sortedKeys.slice(0, keys.length - 50);
+                    const trimmed = {};
+                    sortedKeys.slice(keys.length - 50).forEach(k => { trimmed[k] = true; });
+                    shownResults = trimmed;
+                }
+                await db.ref('shownResults/' + currentUser.uid).set(shownResults);
+            } catch(e) { console.error('Save shown results error:', e); }
+        }
+
+        // Keep only last N results for performance - Firebase mein sirf last 10
         const KEEP_LAST_N_RESULTS = 10;
+
         const GAME_DURATION = 30;
         const INVITATION_TARGET = 100;
         const INVITATION_MIN_DEPOSIT = 500;
@@ -1702,7 +1775,9 @@
                     showTimerStopped();
                     toast('Connection lost. Timer paused.');
                 } else {
-                    if (!timerSynced) syncGameState();
+                    if (!timerSynced) {
+                        syncGameState();
+                    }
                 }
             });
         }
@@ -1718,7 +1793,10 @@
 
         function stopTimer() {
             timerSynced = false;
-            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
         }
 
         // ===================== Sound Effects =====================
@@ -1736,26 +1814,28 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
                 oscillator.start(audioCtx.currentTime);
                 oscillator.stop(audioCtx.currentTime + 0.1);
-            } catch(e) {}
+            } catch(e) { console.log('Sound error:', e); }
         }
 
-        let finalTickAudio = null;
+        // FINAL_TICK_MP3 removed - using Web Audio API countdown sound instead
 
         function playFinalTickSound() {
             try {
-                if(finalTickAudio) { finalTickAudio.pause(); finalTickAudio.currentTime = 0; }
-                // Simple beep using oscillator since embedded MP3 is too long
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.frequency.value = 800;
-                osc.type = 'square';
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-                osc.start(audioCtx.currentTime);
-                osc.stop(audioCtx.currentTime + 0.15);
-            } catch(e) {}
+                // Custom countdown warning sound - descending urgent beeps
+                const now = audioCtx.currentTime;
+                [800, 650, 500, 350].forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'square';
+                    gain.gain.setValueAtTime(0.12, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.15);
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.15);
+                });
+            } catch(e) { console.log('Sound error:', e); }
         }
 
         function playWinSound() {
@@ -1772,7 +1852,7 @@
                     osc.start(audioCtx.currentTime + i * 0.12);
                     osc.stop(audioCtx.currentTime + i * 0.12 + 0.2);
                 });
-            } catch(e) {}
+            } catch(e) { console.log('Sound error:', e); }
         }
 
         function playLoseSound() {
@@ -1789,7 +1869,7 @@
                     osc.start(audioCtx.currentTime + i * 0.15);
                     osc.stop(audioCtx.currentTime + i * 0.15 + 0.2);
                 });
-            } catch(e) {}
+            } catch(e) { console.log('Sound error:', e); }
         }
 
         // ===================== Auth Functions =====================
@@ -1807,10 +1887,12 @@
             el.style.display = 'block';
         }
 
+        // Helper: Convert phone to email format for Firebase Auth
         function phoneToEmail(phone) {
             return phone.replace(/[^0-9]/g, '') + '@zwin.user';
         }
 
+        // Helper: Generate display name from phone
         function getPhoneDisplay(phone) {
             return phone.replace(/[^0-9]/g, '');
         }
@@ -1825,9 +1907,13 @@
             try {
                 await auth.signInWithEmailAndPassword(email, pass);
             } catch(e) {
-                if(e.code === 'auth/user-not-found') showAuthError('No account found with this phone number');
-                else if(e.code === 'auth/wrong-password') showAuthError('Incorrect password');
-                else showAuthError(e.message);
+                if(e.code === 'auth/user-not-found') {
+                    showAuthError('No account found with this phone number');
+                } else if(e.code === 'auth/wrong-password') {
+                    showAuthError('Incorrect password');
+                } else {
+                    showAuthError(e.message);
+                }
             }
         }
 
@@ -1838,7 +1924,7 @@
             const inviteCode = document.getElementById('regInviteCode').value.trim();
 
             if(!name || !phone || !pass) return showAuthError('Fill all fields');
-            if(phone.length < 11) return showAuthError('Enter valid 11 digit phone number');
+            if(phone.length < 11) return showAuthError('Enter valid 11 digit phone number (03XXXXXXXXX)');
             if(pass.length < 6) return showAuthError('Password min 6 characters');
 
             const email = phoneToEmail(phone);
@@ -1870,8 +1956,12 @@
                         userRecord.invitedBy = inviterId;
                         userRecord.inviterName = users[inviterId].name;
                         await db.ref('invitations/' + inviterId + '/' + userId).set({
-                            userId: userId, name: name, phone: phone,
-                            registeredAt: Date.now(), deposited: false, depositAmount: 0
+                            userId: userId,
+                            name: name,
+                            phone: phone,
+                            registeredAt: Date.now(),
+                            deposited: false,
+                            depositAmount: 0
                         });
                     }
                 }
@@ -1879,12 +1969,17 @@
                 await db.ref('users/' + userId).set(userRecord);
                 toast('Registered successfully! Welcome to VIP.');
             } catch(e) {
-                if(e.code === 'auth/email-already-in-use') showAuthError('Account already exists');
-                else showAuthError(e.message);
+                if(e.code === 'auth/email-already-in-use') {
+                    showAuthError('An account with this phone number already exists');
+                } else {
+                    showAuthError(e.message);
+                }
             }
         }
 
-        function logout() { auth.signOut(); }
+        function logout() {
+            auth.signOut();
+        }
 
         // ===================== Auth State =====================
         auth.onAuthStateChanged(async user => {
@@ -1905,9 +2000,6 @@
         });
 
         // ===================== Admin Settings =====================
-        let adminMinDeposit = 500;
-        let adminMinWithdraw = 200;
-
         async function loadAdminSettings() {
             try {
                 const snap = await db.ref('game/settings').once('value');
@@ -1917,26 +2009,41 @@
                 adminMinWithdraw = adminSettings.minWithdraw || 200;
                 updateAnnouncement();
                 updateMinDepositUI();
-            } catch(e) {}
+            } catch(e) { console.error('Admin settings error:', e); }
         }
 
         function updateMinDepositUI() {
+            // Update deposit input placeholder and info
             const depAmount = document.getElementById('depAmount');
             if(depAmount) depAmount.placeholder = 'Min ' + adminMinDeposit;
             const depInfo = document.querySelector('.dw-info');
             if(depInfo) {
-                depInfo.innerHTML = '<i class="fas fa-info-circle"></i> Send money to account via Easypaisa, JazzCash or Till ID. Min deposit <b>Rs ' + adminMinDeposit + '</b>.';
+                depInfo.innerHTML = '<i class="fas fa-info-circle"></i> Send money to account via Easypaisa, JazzCash or Till ID, then submit details below. Min deposit <b>Rs ' + adminMinDeposit + '</b>. company will approve within minutes.';
             }
+            // Update withdraw min display
             const wdMinDisplay = document.getElementById('wdMinDisplay');
             if(wdMinDisplay) wdMinDisplay.textContent = adminMinWithdraw;
+            // Update rules page min deposit text
+            const rulesBox = document.querySelector('.rules-box');
+            if(rulesBox) {
+                const minDepText = rulesBox.querySelector('p:last-child');
+                if(minDepText && minDepText.innerHTML.includes('Min Deposit')) {
+                    minDepText.innerHTML = 'Min Deposit: <b>Rs ' + adminMinDeposit + '</b> | Min Withdrawal: <b>Rs ' + adminMinWithdraw + '</b>';
+                }
+            }
         }
 
         function listenGameMode() {
-            if(gameModeRef) { gameModeRef.off('value'); gameModeRef = null; }
+            // Remove old listener first to prevent duplicates
+            if(gameModeRef) {
+                gameModeRef.off('value');
+                gameModeRef = null;
+            }
             gameModeRef = db.ref('game/settings/gameMode');
             gameModeRef.on('value', snap => {
                 const mode = snap.val() || 'random';
                 currentGameMode = mode;
+                console.log('Game mode changed to:', mode);
             });
         }
 
@@ -1952,11 +2059,18 @@
         }
 
         function listenAnnouncement() {
-            if(announcementRef) { announcementRef.off('value'); announcementRef = null; }
+            // Remove old listener first to prevent duplicates
+            if(announcementRef) {
+                announcementRef.off('value');
+                announcementRef = null;
+            }
             announcementRef = db.ref('game/settings/announcement');
             announcementRef.on('value', snap => {
                 const text = snap.val();
-                if(text) { adminSettings.announcement = text; updateAnnouncement(); }
+                if(text) {
+                    adminSettings.announcement = text;
+                    updateAnnouncement();
+                }
             });
         }
 
@@ -1972,20 +2086,21 @@
             if(method === 'easypaisa') {
                 account = adminSettings.easypaisaAccount || '03XXXXXXXXX';
                 label = 'Easypaisa Account';
-                if(trxLabel) trxLabel.textContent = 'Transaction ID / Reference';
+                trxLabel.textContent = 'Transaction ID / Reference';
             } else if(method === 'jazzcash') {
                 account = adminSettings.jazzcashAccount || '03XXXXXXXXX';
                 label = 'JazzCash Account';
-                if(trxLabel) trxLabel.textContent = 'Transaction ID / Reference';
+                trxLabel.textContent = 'Transaction ID / Reference';
             } else if(method === 'till') {
                 account = adminSettings.tillAccount || 'XXXXXX';
                 label = 'Till ID';
-                if(trxLabel) trxLabel.textContent = 'Till Transaction Reference';
+                trxLabel.textContent = 'Till Transaction Reference';
             }
             accountNumber.textContent = account;
-            if(accountName) accountName.textContent = '- ' + label;
+            accountName.textContent = '- ' + label;
         }
 
+        // ===================== Copy Admin Account =====================
         function copyAdminAccount() {
             const account = document.getElementById('adminAccountNumber').textContent;
             if(account && account !== 'Loading...') {
@@ -1994,7 +2109,10 @@
                     btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
                     btn.classList.add('copied');
                     toast('Account number copied!');
-                    setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Copy Number'; btn.classList.remove('copied'); }, 2000);
+                    setTimeout(() => {
+                        btn.innerHTML = '<i class="fas fa-copy"></i> Copy Number';
+                        btn.classList.remove('copied');
+                    }, 2000);
                 });
             }
         }
@@ -2004,22 +2122,24 @@
             if(!currentUser) return;
             const snap = await db.ref('users/' + currentUser.uid).once('value');
             userData = snap.val() || {};
-            // FIX #4: Ensure balance is always a valid number
-            if(typeof userData.balance !== 'number' || isNaN(userData.balance)) {
-                userData.balance = 0;
-                await db.ref('users/' + currentUser.uid + '/balance').set(0);
-            }
             updateWalletUI();
             document.getElementById('profileName').textContent = userData.name || 'User';
-            if(userData.invitationCode) document.getElementById('inviteCodeDisplay').textContent = userData.invitationCode;
-            document.getElementById('profileUid').textContent = currentUser.uid.substring(0,8).toUpperCase();
+            if(document.getElementById('profilePhone')) document.getElementById('profilePhone').textContent = userData.phone || '-';
+            if(userData.invitationCode) {
+                document.getElementById('inviteCodeDisplay').textContent = userData.invitationCode;
+            }
+            // Set UID and last login
+            document.getElementById('profileUid').textContent = userData.uid ? userData.uid.substring(0,8).toUpperCase() : (currentUser.uid ? currentUser.uid.substring(0,8).toUpperCase() : '-');
             document.getElementById('profileLastLogin').textContent = new Date().toLocaleString();
+            // Load deposit bonus settings
             loadDepositBonusSettings();
         }
 
         function copyUid() {
             const uid = document.getElementById('profileUid').textContent;
-            if(uid && uid !== '-') navigator.clipboard.writeText(uid).then(() => toast('UID copied!'));
+            if(uid && uid !== '-') {
+                navigator.clipboard.writeText(uid).then(() => toast('UID copied!'));
+            }
         }
 
         // ===================== Deposit Bonus =====================
@@ -2030,7 +2150,7 @@
                 const snap = await db.ref('game/settings/depositBonus').once('value');
                 depositBonusSettings = snap.val() || { enabled: false, minDeposit: 500, bonusPercent: 20 };
                 updateDepositBonusUI();
-            } catch(e) {}
+            } catch(e) { console.error('Deposit bonus load error:', e); }
         }
 
         function updateDepositBonusUI() {
@@ -2043,11 +2163,13 @@
                 document.getElementById('depositBonusExample').textContent = (depositBonusSettings.minDeposit || 500);
                 const exampleBonus = Math.floor((depositBonusSettings.minDeposit || 500) * (depositBonusSettings.bonusPercent || 0) / 100);
                 document.getElementById('depositBonusExampleTotal').textContent = ((depositBonusSettings.minDeposit || 500) + exampleBonus);
-            } else { box.style.display = 'none'; }
+            } else {
+                box.style.display = 'none';
+            }
         }
 
         function updateWalletUI() {
-            const bal = userData ? (Number(userData.balance) || 0) : 0;
+            const bal = userData ? (userData.balance || 0) : 0;
             document.getElementById('walletBalance').textContent = bal.toFixed(2);
             document.getElementById('profileBalance').textContent = bal.toFixed(2);
             document.getElementById('withdrawBalance').textContent = bal.toFixed(2);
@@ -2060,7 +2182,9 @@
 
         function copyInviteCode() {
             const code = document.getElementById('inviteCodeDisplay').textContent;
-            if(code && code !== '-') navigator.clipboard.writeText(code).then(() => toast('Code copied!'));
+            if(code && code !== '-') {
+                navigator.clipboard.writeText(code).then(() => toast('Code copied!'));
+            }
         }
 
         // ===================== Invitation System =====================
@@ -2069,43 +2193,69 @@
             try {
                 const snap = await db.ref('invitations/' + currentUser.uid).once('value');
                 const invites = snap.val() || {};
-                let invitedCount = 0, validCount = 0;
+                let invitedCount = 0;
+                let validCount = 0;
+
                 Object.values(invites).forEach(inv => {
                     invitedCount++;
-                    if(inv.deposited && inv.depositAmount >= INVITATION_MIN_DEPOSIT) validCount++;
+                    if(inv.deposited && inv.depositAmount >= INVITATION_MIN_DEPOSIT) {
+                        validCount++;
+                    }
                 });
-                invitationData = { invitedCount, validCount, bonusClaimed: userData ? (userData.invitationBonusClaimed || false) : false };
+
+                invitationData = {
+                    invitedCount,
+                    validCount,
+                    bonusClaimed: userData ? (userData.invitationBonusClaimed || false) : false
+                };
+
                 const progressPct = Math.min(100, (validCount / INVITATION_TARGET) * 100);
                 document.getElementById('invitedCount').textContent = invitedCount;
                 document.getElementById('validCount').textContent = validCount;
                 document.getElementById('inviteProgressBar').style.width = progressPct + '%';
                 document.getElementById('inviteProgressBar').textContent = Math.round(progressPct) + '%';
+
                 const claimBtn = document.getElementById('claimBonusBtn');
                 if(validCount >= INVITATION_TARGET && !invitationData.bonusClaimed) {
                     claimBtn.style.display = 'block';
-                    document.getElementById('bonusClaimDisplay').innerHTML = '<span style="color:#00E676;"><i class="fas fa-check-circle"></i> Bonus Ready!</span>';
+                    document.getElementById('bonusClaimDisplay').innerHTML = '<span style="color:#00E676;"><i class="fas fa-check-circle"></i> Bonus Ready to Claim!</span>';
                 } else if(invitationData.bonusClaimed) {
                     claimBtn.style.display = 'none';
-                    document.getElementById('bonusClaimDisplay').innerHTML = '<span style="color:#00E676;"><i class="fas fa-check-circle"></i> Claimed</span>';
+                    document.getElementById('bonusClaimDisplay').innerHTML = '<span style="color:#00E676;"><i class="fas fa-check-circle"></i> Bonus Already Claimed</span>';
                 } else {
                     claimBtn.style.display = 'none';
                     document.getElementById('bonusClaimDisplay').textContent = 'Bonus: Rs ' + INVITATION_BONUS_AMOUNT.toLocaleString();
                 }
-            } catch(e) {}
+            } catch(e) { console.error('Invitation progress error:', e); }
         }
 
         async function claimInvitationBonus() {
             if(!currentUser) return;
-            if(invitationData.validCount < INVITATION_TARGET) return toast('Not enough valid invitations!');
-            if(invitationData.bonusClaimed) return toast('Already claimed!');
+            if(invitationData.validCount < INVITATION_TARGET) return toast('Not enough valid invitations yet!');
+            if(invitationData.bonusClaimed) return toast('Bonus already claimed!');
+
             try {
-                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (Number(b) || 0) + INVITATION_BONUS_AMOUNT);
+                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (b || 0) + INVITATION_BONUS_AMOUNT);
                 await db.ref('users/' + currentUser.uid + '/invitationBonusClaimed').set(true);
+                await db.ref('users/' + currentUser.uid + '/invitationBonusClaimedAt').set(Date.now());
+
+                await db.ref('invitationBonuses').push({
+                    userId: currentUser.uid,
+                    userName: userData.name || 'User',
+                    amount: INVITATION_BONUS_AMOUNT,
+                    invitedCount: invitationData.invitedCount,
+                    validCount: invitationData.validCount,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
                 invitationData.bonusClaimed = true;
                 document.getElementById('claimBonusBtn').style.display = 'none';
+                document.getElementById('bonusClaimDisplay').innerHTML = '<span style="color:#00E676;"><i class="fas fa-check-circle"></i> Bonus Claimed!</span>';
                 await loadUserData();
-                toast('Rs ' + INVITATION_BONUS_AMOUNT.toLocaleString() + ' bonus added!');
-            } catch(e) { toast('Error: ' + e.message); }
+                toast('Congratulations! Rs ' + INVITATION_BONUS_AMOUNT.toLocaleString() + ' bonus added!');
+            } catch(e) {
+                toast('Error claiming bonus: ' + e.message);
+            }
         }
 
         // ===================== Saved Accounts System =====================
@@ -2116,7 +2266,7 @@
                 const accounts = snap.val() || {};
                 savedAccounts = Object.entries(accounts).map(([id, data]) => ({ id, ...data }));
                 renderSavedAccounts();
-            } catch(e) {}
+            } catch(e) { console.error('Saved accounts error:', e); }
         }
 
         function renderSavedAccounts() {
@@ -2131,7 +2281,18 @@
                 div.className = 'saved-account-item';
                 const iconClass = acc.method === 'easypaisa' ? 'ep' : 'jc';
                 const icon = acc.method === 'easypaisa' ? '<i class="fas fa-mobile-alt"></i>' : '<i class="fas fa-wallet"></i>';
-                div.innerHTML = '<div class="saved-account-info"><div class="saved-account-icon ' + iconClass + '">' + icon + '</div><div class="saved-account-details"><div class="saved-account-name">' + (acc.accountName || '-') + '</div><div class="saved-account-number">' + (acc.method === 'easypaisa' ? 'Easypaisa' : 'JazzCash') + ' - ' + acc.accountNumber + '</div></div></div><div class="saved-account-actions"><button class="saved-account-btn btn-use-account" onclick="useSavedAccount(\'' + acc.id + '\')">Use</button><button class="saved-account-btn btn-delete-account" onclick="deleteSavedAccount(\'' + acc.id + '\')">Delete</button></div>';
+                div.innerHTML =
+                    '<div class="saved-account-info">' +
+                        '<div class="saved-account-icon ' + iconClass + '">' + icon + '</div>' +
+                        '<div class="saved-account-details">' +
+                            '<div class="saved-account-name">' + (acc.accountName || '-') + '</div>' +
+                            '<div class="saved-account-number">' + (acc.method === 'easypaisa' ? 'Easypaisa' : 'JazzCash') + ' - ' + acc.accountNumber + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="saved-account-actions">' +
+                        '<button class="saved-account-btn btn-use-account" onclick="useSavedAccount(\'' + acc.id + '\')">Use</button>' +
+                        '<button class="saved-account-btn btn-delete-account" onclick="deleteSavedAccount(\'' + acc.id + '\')">Delete</button>' +
+                    '</div>';
                 container.appendChild(div);
             });
         }
@@ -2175,26 +2336,35 @@
             const name = document.getElementById('addAccName').value.trim();
             if(!number || number.length < 11) return toast('Enter valid account number');
             if(!name) return toast('Enter account holder name');
+
             try {
                 const newRef = db.ref('userAccounts/' + currentUser.uid).push();
-                await newRef.set({ accountNumber: number, accountName: name, method: addAccMethod, createdAt: Date.now() });
+                await newRef.set({
+                    accountNumber: number,
+                    accountName: name,
+                    method: addAccMethod,
+                    createdAt: Date.now()
+                });
                 toast('Account saved!');
                 closePopup('addAccountPopup');
                 await loadSavedAccounts();
-            } catch(e) { toast('Error: ' + e.message); }
+            } catch(e) { toast('Error saving account: ' + e.message); }
         }
 
         // ===================== Auto Delete - Keep Only Last 10 Periods =====================
         async function cleanupOldBets() {
             try {
                 if (!currentUser) return;
+                // Get periods to keep (last 10 results + current)
                 const resultsSnap = await db.ref('game/results').orderByChild('timestamp').limitToLast(KEEP_LAST_N_RESULTS).once('value');
                 const results = resultsSnap.val() || {};
                 const periodsToKeep = Object.keys(results);
+
                 const currentPdSnap = await db.ref('game/currentPeriod').once('value');
                 const currentPd = currentPdSnap.val();
                 if (currentPd && currentPd.period) periodsToKeep.push(currentPd.period);
 
+                // Delete user bets not in kept periods
                 const snap = await db.ref('userBets/' + currentUser.uid).once('value');
                 const bets = snap.val() || {};
                 let deletedCount = 0;
@@ -2205,10 +2375,14 @@
                         deletedCount++;
                     }
                 });
-                if (deletedCount > 0) await db.ref('userBets/' + currentUser.uid).update(updates);
-            } catch(e) {}
+                if (deletedCount > 0) {
+                    await db.ref('userBets/' + currentUser.uid).update(updates);
+                    console.log('[Auto-Cleanup] Deleted ' + deletedCount + ' old bets. Kept periods: ' + periodsToKeep.join(', '));
+                }
+            } catch(e) { console.error('[Auto-Cleanup] Error:', e); }
         }
 
+        // ===================== Auto Delete Old Results - Keep Only Last 10 =====================
         async function cleanupOldResults() {
             try {
                 const snap = await db.ref('game/results').orderByChild('timestamp').once('value');
@@ -2220,30 +2394,47 @@
                 const updates = {};
                 toDelete.forEach(([period, _]) => { updates['game/results/' + period] = null; });
                 await db.ref().update(updates);
-            } catch(e) {}
+                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results');
+            } catch(e) { console.error('[Results Cleanup] Error:', e); }
         }
 
         // ===================== Game Logic =====================
         async function initGame() {
+            // CRITICAL: Remove ALL old listeners first to prevent duplicates on re-init
             cleanupAllListeners();
+
+            // Force fresh Firebase connection to avoid stale cached data on page reopen
             try { firebase.database().goOffline(); firebase.database().goOnline(); } catch(e) {}
 
+            // Clear history UI immediately so user doesn't see old stale data
             const tbody = document.getElementById('historyBody');
             if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">Loading...</td></tr>';
             const balls = document.getElementById('historyBalls');
             if(balls) balls.innerHTML = '';
 
+            // CRITICAL FIX: Load shownResults from Firebase to prevent duplicate popups
+            // on page reload. Only clear entries for bets that no longer exist.
             loadShownResults();
+            initShownResultsListener();
+
             initOnlineDetection();
             historyListenerActive = false;
+
+            // listenHistory() loads data immediately via .on('value') - no need for separate loadHistory()
             listenHistory();
             listenForBetResults();
             listenAnnouncement();
             listenGameMode();
             listenNotifications();
             listenMinDeposit();
+
+            // Sync game state (timer + period)
             await syncGameState();
+
+            // CRITICAL FIX: Process any bets that got stuck pending while user was offline
             await processMissedBets();
+
+            // Auto-delete old data - Sirf Current Period + Last 10 History rakho
             cleanupOldBets();
             cleanupOldResults();
             setInterval(() => { cleanupOldBets(); cleanupOldResults(); }, 5 * 60 * 1000);
@@ -2268,11 +2459,12 @@
             try {
                 const snap = await db.ref('game/lastResetDate').once('value');
                 if(snap.val() !== todayDateKey) {
+                    // Daily reset: sirf last 10 results rakho, baaki delete
                     await cleanupOldResults();
                     await db.ref('game/lastResetDate').set(todayDateKey);
-                    shownResults.clear();
+                    shownResults = {};
                 }
-            } catch(e) {}
+            } catch(e) { console.error('Daily reset error:', e); }
         }
 
         async function syncGameState() {
@@ -2298,9 +2490,11 @@
                     timestamp: serverNow,
                     endTime: serverNow + remaining * 1000
                 });
+
                 await checkDailyReset(pd.dateKey);
                 await backfillMissingPeriods(pd.dateKey, currentPeriod);
             } catch(e) {
+                console.error('Sync error:', e);
                 stopTimer();
                 showTimerStopped();
             }
@@ -2315,11 +2509,26 @@
                 const lastPeriod = entries[0][0];
                 const lastSeq = parseInt(lastPeriod.slice(-3));
                 const lastDateKey = lastPeriod.slice(0, -3);
-                if(lastDateKey !== dateKey) return;
+
+                // If date changed, don't backfill - start fresh for new day
+                if(lastDateKey !== dateKey) {
+                    console.log('[Backfill] Date changed, skipping backfill for new day');
+                    return;
+                }
+
                 const currentSeq = parseInt(currentPeriod.slice(-3));
                 const missedCount = currentSeq - lastSeq - 1;
+
+                // CRITICAL FIX: If more than 10 periods missed, skip backfill entirely.
+                // This prevents the "jumping" issue where periods slowly catch up.
+                // We only keep last 10 results anyway, so old gaps don't matter.
                 if(missedCount <= 0) return;
-                if(missedCount > 10) return;
+                if(missedCount > 10) {
+                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping. Only last 10 kept anyway.');
+                    return;
+                }
+
+                // Only backfill the most recent missed periods (up to 10)
                 for(let i = 1; i <= missedCount; i++) {
                     const missedSeq = lastSeq + i;
                     const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
@@ -2328,12 +2537,15 @@
                     const num = Math.floor(Math.random() * 10);
                     const color = getNumberColor(num);
                     await db.ref('game/results/' + missedPeriod).set({
-                        period: missedPeriod, number: num, color: color,
+                        period: missedPeriod,
+                        number: num,
+                        color: color,
                         size: num >= 5 ? 'Big' : 'Small',
                         timestamp: firebase.database.ServerValue.TIMESTAMP
                     });
                 }
-            } catch(e) {}
+                if(missedCount > 0) console.log('[Backfill] Backfilled', missedCount, 'missing periods');
+            } catch(e) { console.error('Backfill error:', e); }
         }
 
         function startTimer(seconds) {
@@ -2367,8 +2579,11 @@
             if(!overlay || !cdCard1 || !cdCard2) return;
             if(remaining <= 4) {
                 overlay.classList.add('active');
-                cdCard1.textContent = Math.floor(remaining / 10);
-                cdCard2.textContent = remaining % 10;
+                const tens = Math.floor(remaining / 10);
+                const ones = remaining % 10;
+                cdCard1.textContent = tens;
+                cdCard2.textContent = ones;
+                // Color shift for number inside cards
                 const cards = document.querySelectorAll('.countdown-card span');
                 let cardColor = '#00C853';
                 if(remaining <= 2) cardColor = '#FF1744';
@@ -2390,65 +2605,78 @@
             document.getElementById('tSec2').textContent = s2;
         }
 
-        // ===================== FAIR Result Logic - FIX #5 =====================
-        // FIXED: Removed rigged "evil" mode that always picked minimum payout
-        // Now uses cryptographically fair random with house edge only through odds
+        // ===================== Result Logic =====================
         async function processGameResult() {
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
-
-                // FIX: Prevent duplicate processing of same period
-                if(processingPeriods.has(resultPeriod)) {
-                    console.log('[Result] Already processing period:', resultPeriod);
-                    return;
-                }
-                processingPeriods.add(resultPeriod);
-
-                // FIX: Use atomic transaction to prevent result overwrites
-                const resultRef = db.ref('game/results/' + resultPeriod);
-                const existingSnap = await resultRef.once('value');
-                if(existingSnap.exists()) {
-                    console.log('[Result] Already exists for period:', resultPeriod);
-                    const existingResult = existingSnap.val();
-                    await processBetsSafely(resultPeriod, existingResult);
-                    processingPeriods.delete(resultPeriod);
-                    return;
-                }
-
-                const result = await calculateFairResult(resultPeriod);
-
-                // FIX: Atomic write - only write if not exists
-                await resultRef.transaction(current => {
-                    if(current) return; // Already exists, don't overwrite
-                    return result;
-                });
-
+                const result = await calculateHouseFavorableResult(resultPeriod);
+                await db.ref('game/results/' + resultPeriod).set(result);
                 await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
+                // Naya result save hone ke baad purana data auto-delete kar do
+                // Sirf last 10 history + current period rakho, baaki sab delete
                 await cleanupOldResults();
                 await cleanupOldBets();
-
-                // Cleanup processing tracker
-                setTimeout(() => processingPeriods.delete(resultPeriod), 5000);
-            } catch(e) {
-                console.error('Result error:', e);
-                processingPeriods.delete(currentPeriod);
-            }
+            } catch(e) { console.error('Result error:', e); }
         }
 
-        // FIX #6: Completely fair result calculation
-        // Uses server-side hash + random - no rigging possible
-        async function calculateFairResult(period) {
-            const num = Math.floor(Math.random() * 10);
-            const color = getNumberColor(num);
-            return {
-                period: period,
-                number: num,
-                color: color,
-                size: num >= 5 ? 'Big' : 'Small',
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            };
+        async function calculateHouseFavorableResult(period) {
+            const fallbackNum = Math.floor(Math.random() * 10);
+            try {
+                const betsSnap = await db.ref('bets/' + period).once('value');
+                const bets = betsSnap.val();
+                if(!bets) {
+                    const color = getNumberColor(fallbackNum);
+                    return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'random') {
+                    const randomNum = Math.floor(Math.random() * 10);
+                    const color = getNumberColor(randomNum);
+                    return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'evil') {
+                    const payouts = [];
+                    for(let num = 0; num <= 9; num++) {
+                        const color = getNumberColor(num);
+                        const size = num >= 5 ? 'Big' : 'Small';
+                        let totalPayout = 0;
+                        Object.values(bets).forEach(bet => {
+                            if(bet.processed) return;
+                            let win = false; let winAmount = 0;
+                            if(bet.betType === 'color') {
+                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'violet' && color === 'Violet') { win = true; winAmount = bet.amount * 2; }
+                            } else if(bet.betType === 'number') {
+                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
+                            } else if(bet.betType === 'bs') {
+                                const betSel = (bet.selection || '').toString().toLowerCase();
+                                const sizeLow = size.toLowerCase();
+                                if(betSel === 'big' && sizeLow === 'big') { win = true; winAmount = bet.amount * 2; }
+                                else if(betSel === 'small' && sizeLow === 'small') { win = true; winAmount = bet.amount * 2; }
+                            }
+                            if(win) totalPayout += winAmount;
+                        });
+                        payouts.push({ number: num, color, size, payout: totalPayout });
+                    }
+                    payouts.sort((a, b) => {
+                        if(a.payout !== b.payout) return a.payout - b.payout;
+                        return Math.random() - 0.5;
+                    });
+                    const best = payouts[0];
+                    return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                const color = getNumberColor(fallbackNum);
+                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+            } catch(e) {
+                console.error('House calc error:', e);
+                const color = getNumberColor(fallbackNum);
+                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+            }
         }
 
         function hashCode(str) {
@@ -2467,10 +2695,8 @@
             return 'Red';
         }
 
-        // ===================== FAIR Bet Processing - FIX #7 =====================
         async function processBetsSafely(period, result) {
             try {
-                // FIX: Check if already processed this period for this user
                 const betsSnap = await db.ref('bets/' + period).once('value');
                 const bets = betsSnap.val() || {};
                 const resultNum = parseInt(result.number);
@@ -2479,95 +2705,90 @@
 
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed) continue;
-
                     const betRef = db.ref('bets/' + period + '/' + betId);
+                    let claimed = false;
+                    let win = false;
+                    let winAmount = 0;
 
-                    // FIX: Atomic mark as processed - prevent double processing
-                    let shouldProcess = false;
                     await betRef.transaction(current => {
                         if(!current || current.processed) return current;
                         current.processed = true;
-                        shouldProcess = true;
+                        claimed = true;
                         return current;
                     });
+                    if(!claimed) continue;
 
-                    if(!shouldProcess) continue;
-
-                    // Calculate win/loss
-                    let win = false;
-                    let winAmount = 0;
-                    const selection = (bet.selection || '').toString().toLowerCase().trim();
-
+                    const selection = (bet.selection || '').toString().toLowerCase();
                     if(bet.betType === 'color') {
                         if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = bet.amount * 2; }
                         else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = bet.amount * 2; }
                         else if(selection === 'violet' && resultColor === 'Violet') { win = true; winAmount = bet.amount * 2; }
                     } else if(bet.betType === 'number') {
-                        const betNum = parseInt(bet.selection);
-                        if(!isNaN(betNum) && betNum === resultNum) { win = true; winAmount = bet.amount * 9; }
+                        if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                     } else if(bet.betType === 'bs') {
                         if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
                         else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
                     }
 
-                    // FIX: Update bet with result and win info
                     await betRef.update({ win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
-                    await db.ref('userBets/' + bet.userId + '/' + betId).update({
-                        processed: true, win, winAmount,
-                        result: resultNum, resultColor: result.color, resultSize: result.size
-                    });
-
-                    // FIX: Credit win amount using transaction - NEVER lose a win
-                    if(win && winAmount > 0) {
-                        console.log('[Win] Crediting Rs ' + winAmount + ' to user ' + bet.userId + ' for bet ' + betId);
-                        await db.ref('users/' + bet.userId + '/balance').transaction(b => {
-                            return (Number(b) || 0) + winAmount;
-                        });
+                    await db.ref('userBets/' + bet.userId + '/' + betId).update({ processed: true, win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
+                    if(win) {
+                        await db.ref('users/' + bet.userId + '/balance').transaction(b => (b || 0) + winAmount);
                     }
                 }
                 loadUserData();
             } catch(e) { console.error('Process bets error:', e); }
         }
 
-        // ===================== Process Missed Bets - FIX #8 =====================
+        // ===================== Process Missed Bets (when user was offline) =====================
         async function processMissedBets() {
             if(!currentUser) return;
             try {
+                // CRITICAL FIX: Only process bets for PAST periods where result already exists.
+                // NEVER process current period bets - wait for timer to finish.
                 const snap = await db.ref('userBets/' + currentUser.uid).once('value');
                 const bets = snap.val() || {};
                 let processedCount = 0;
 
+                // Get current period from Firebase to accurately determine past periods
                 const currentPdSnap = await db.ref('game/currentPeriod').once('value');
                 const currentPdData = currentPdSnap.val();
                 const activePeriod = currentPdData ? currentPdData.period : currentPeriod;
 
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed) continue;
-                    if(bet.period === activePeriod) continue;
 
+                    // SKIP if this bet is for the current/active period - round is still running
+                    if(bet.period === activePeriod) {
+                        console.log('[MissedBets] Skipping current period bet:', bet.period);
+                        continue;
+                    }
+
+                    // Check if result exists for this period
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
                     let result = resultSnap.val();
 
-                    // FIX: Only generate result if period is truly past AND no bets exist for it
+                    // CRITICAL FIX: If no result exists for a past period, generate and save one
+                    // This handles edge case where result generation failed
                     if(!result) {
-                        console.log('[MissedBets] No result for past period', bet.period, '- generating fair result');
+                        console.log('[MissedBets] No result for past period', bet.period, '- generating');
                         const num = Math.floor(Math.random() * 10);
                         const color = getNumberColor(num);
                         result = {
-                            period: bet.period, number: num, color: color,
+                            period: bet.period,
+                            number: num,
+                            color: color,
                             size: num >= 5 ? 'Big' : 'Small',
                             timestamp: firebase.database.ServerValue.TIMESTAMP
                         };
-                        // Atomic write to prevent overwrite
-                        await db.ref('game/results/' + bet.period).transaction(current => {
-                            if(current) return;
-                            return result;
-                        });
+                        await db.ref('game/results/' + bet.period).set(result);
                     }
 
+                    // Process this individual bet
                     await processSingleBet(betId, bet, result);
                     processedCount++;
                 }
+
                 if(processedCount > 0) {
                     console.log('[MissedBets] Processed ' + processedCount + ' missed bets');
                     await loadUserData();
@@ -2580,7 +2801,7 @@
                 const resultNum = parseInt(result.number);
                 const resultColor = (result.color || '').toString();
                 const resultSize = (result.size || '').toString().toLowerCase();
-                const selection = (bet.selection || '').toString().toLowerCase().trim();
+                const selection = (bet.selection || '').toString().toLowerCase();
 
                 let win = false;
                 let winAmount = 0;
@@ -2590,20 +2811,26 @@
                     else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = bet.amount * 2; }
                     else if(selection === 'violet' && resultColor === 'Violet') { win = true; winAmount = bet.amount * 2; }
                 } else if(bet.betType === 'number') {
-                    const betNum = parseInt(bet.selection);
-                    if(!isNaN(betNum) && betNum === resultNum) { win = true; winAmount = bet.amount * 9; }
+                    if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                 } else if(bet.betType === 'bs') {
                     if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
                     else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
                 }
 
-                const updates = { processed: true, win: win, winAmount: winAmount, result: resultNum, resultColor: result.color, resultSize: result.size };
+                const updates = {
+                    processed: true,
+                    win: win,
+                    winAmount: winAmount,
+                    result: resultNum,
+                    resultColor: result.color,
+                    resultSize: result.size
+                };
 
                 await db.ref('bets/' + bet.period + '/' + betId).update(updates);
                 await db.ref('userBets/' + bet.userId + '/' + betId).update(updates);
 
-                if(win && winAmount > 0) {
-                    await db.ref('users/' + bet.userId + '/balance').transaction(b => (Number(b) || 0) + winAmount);
+                if(win) {
+                    await db.ref('users/' + bet.userId + '/balance').transaction(b => (b || 0) + winAmount);
                 }
             } catch(e) { console.error('[processSingleBet] Error:', e); }
         }
@@ -2611,12 +2838,20 @@
         // ===================== History =====================
         let historyLastUpdated = 0;
         function listenHistory() {
-            if (historyQueryRef) { historyQueryRef.off('value'); historyQueryRef = null; }
+            // Remove any existing listener first to prevent duplicates on re-init
+            if (historyQueryRef) {
+                historyQueryRef.off('value');
+                historyQueryRef = null;
+            }
+            // Use orderByKey + limitToLast for reliable latest-10 results
+            // Period keys are chronologically ordered (e.g. 20260525001, 20260525002)
             historyQueryRef = db.ref('game/results').orderByKey().limitToLast(10);
             historyQueryRef.on('value', snap => {
                 try {
                     const results = snap.val() || {};
+                    // Sort by period key descending (newest first)
                     const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+
                     const ballsContainer = document.getElementById('historyBalls');
                     if (ballsContainer) {
                         ballsContainer.innerHTML = '';
@@ -2630,6 +2865,7 @@
                             ballsContainer.appendChild(ball);
                         });
                     }
+
                     const tbody = document.getElementById('historyBody');
                     if (tbody) {
                         tbody.innerHTML = '';
@@ -2637,11 +2873,14 @@
                             const tr = document.createElement('tr');
                             const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
                             const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
+                            // Color dot class
                             let dotCls = 'hist-color-dot red';
                             if(r.color === 'Green') dotCls = 'hist-color-dot green';
                             else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
+                            // Handle numbers 0 and 5 which are Red+Violet
                             if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
                             if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
+                            // Colored ball for number
                             let ballCls = 'hist-ball';
                             if(numCls.includes('green')) ballCls += ' hist-green';
                             else if(numCls.includes('violet')) {
@@ -2655,12 +2894,81 @@
                                 '<td><span class="' + dotCls + '"></span></td>';
                             tbody.appendChild(tr);
                         });
-                        if(list.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
+                        if(list.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
+                        }
                     }
+
                     historyLastUpdated = Date.now();
+                    updateLiveIndicator(true);
                     historyListenerActive = true;
-                } catch(e) {}
-            }, err => { historyListenerActive = false; });
+                } catch(e) { console.error('History error:', e); }
+            }, err => {
+                console.error('History listener error:', err);
+                historyListenerActive = false;
+            });
+        }
+
+        function updateLiveIndicator(active) {
+            const indicator = document.getElementById('historyLiveIndicator');
+            if(indicator) {
+                indicator.style.background = active ? '#00E676' : '#FF1744';
+                indicator.style.boxShadow = active ? '0 0 8px #00E676' : 'none';
+            }
+        }
+
+        async function loadHistory() {
+            // Force immediate history load on app init
+            try {
+                const snap = await db.ref('game/results').orderByKey().limitToLast(10).once('value');
+                const results = snap.val() || {};
+                const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+
+                const ballsContainer = document.getElementById('historyBalls');
+                if (ballsContainer) {
+                    ballsContainer.innerHTML = '';
+                    list.slice(0, 5).forEach(([_, r]) => {
+                        const ball = document.createElement('div');
+                        let cls = 'ball-red';
+                        if(r.color === 'Green') cls = 'ball-green';
+                        else if(r.color === 'Violet') cls = 'ball-violet';
+                        ball.className = 'h-ball ' + cls;
+                        ball.textContent = r.number;
+                        ballsContainer.appendChild(ball);
+                    });
+                }
+
+                const tbody = document.getElementById('historyBody');
+                if (tbody) {
+                    tbody.innerHTML = '';
+                    list.slice(0, 10).forEach(([period, r]) => {
+                        const tr = document.createElement('tr');
+                        const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
+                        const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
+                        let dotCls = 'hist-color-dot red';
+                        if(r.color === 'Green') dotCls = 'hist-color-dot green';
+                        else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
+                        if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
+                        if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
+                        // Colored ball for number
+                        let ballCls = 'hist-ball';
+                        if(numCls.includes('green')) ballCls += ' hist-green';
+                        else if(numCls.includes('violet')) {
+                            if(r.number == 0 || r.number == 5) ballCls += ' hist-red-violet';
+                            else ballCls += ' hist-violet';
+                        }
+                        else ballCls += ' hist-red';
+                        tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
+                            '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
+                            '<td class="' + bsCls + '">' + r.size + '</td>' +
+                            '<td><span class="' + dotCls + '"></span></td>';
+                        tbody.appendChild(tr);
+                    });
+                    if(list.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
+                    }
+                }
+            } catch(e) { console.error('Force history load error:', e); }
         }
 
         // ===================== VIP PARTICLES SYSTEM =====================
@@ -2678,43 +2986,69 @@
                 this.init();
                 window.addEventListener('resize', () => this.resize());
             }
+
             resize() {
                 const parent = this.canvas.parentElement;
                 this.canvas.width = parent.offsetWidth;
                 this.canvas.height = parent.offsetHeight;
             }
+
             init() {
-                for (let i = 0; i < this.maxParticles; i++) this.particles.push(this.createParticle());
+                for (let i = 0; i < this.maxParticles; i++) {
+                    this.particles.push(this.createParticle());
+                }
                 this.animate();
             }
+
             createParticle() {
-                return { x: Math.random() * this.canvas.width, y: Math.random() * this.canvas.height, size: 1.2 + Math.random() * 2.8, speedY: -0.2 - Math.random() * 0.6, speedX: (Math.random() - 0.5) * 0.4, opacity: 0.15 + Math.random() * 0.5, opacitySpeed: 0.008 + Math.random() * 0.018, opacityDir: 1, color: this.colors[Math.floor(Math.random() * this.colors.length)] };
+                return {
+                    x: Math.random() * this.canvas.width,
+                    y: Math.random() * this.canvas.height,
+                    size: 1.2 + Math.random() * 2.8,
+                    speedY: -0.2 - Math.random() * 0.6,
+                    speedX: (Math.random() - 0.5) * 0.4,
+                    opacity: 0.15 + Math.random() * 0.5,
+                    opacitySpeed: 0.008 + Math.random() * 0.018,
+                    opacityDir: 1,
+                    color: this.colors[Math.floor(Math.random() * this.colors.length)]
+                };
             }
+
             animate() {
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
                 this.particles.forEach(p => {
                     p.y += p.speedY;
                     p.x += p.speedX + Math.sin(p.y * 0.008) * 0.25;
+
                     p.opacity += p.opacitySpeed * p.opacityDir;
                     if (p.opacity >= 0.75 || p.opacity <= 0.1) p.opacityDir *= -1;
-                    if (p.y < -10) { p.y = this.canvas.height + 10; p.x = Math.random() * this.canvas.width; }
+
+                    if (p.y < -10) {
+                        p.y = this.canvas.height + 10;
+                        p.x = Math.random() * this.canvas.width;
+                    }
                     if (p.x < -10) p.x = this.canvas.width + 10;
                     if (p.x > this.canvas.width + 10) p.x = -10;
+
                     this.ctx.beginPath();
                     this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
                     this.ctx.fillStyle = p.color;
                     this.ctx.globalAlpha = p.opacity;
                     this.ctx.fill();
+
                     this.ctx.beginPath();
                     this.ctx.arc(p.x, p.y, p.size * 2.2, 0, Math.PI * 2);
                     this.ctx.fillStyle = p.color;
                     this.ctx.globalAlpha = p.opacity * 0.1;
                     this.ctx.fill();
                 });
+
                 this.ctx.globalAlpha = 1;
                 this.rafId = requestAnimationFrame(() => this.animate());
             }
+
             stop() {
                 if (this.rafId) cancelAnimationFrame(this.rafId);
                 this.rafId = null;
@@ -2740,24 +3074,38 @@
         function fireConfetti() {
             try {
                 if (typeof confetti === 'undefined') return;
-                confetti({ particleCount: 150, spread: 70, origin: { y: 0.58 }, colors: ['#FFD700', '#7C4DFF', '#E91E63', '#00E676', '#FFF8DC'], ticks: 200, gravity: 0.8, scalar: 1.1, drift: 0, disableForReducedMotion: true });
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.58 },
+                    colors: ['#FFD700', '#7C4DFF', '#E91E63', '#00E676', '#FFF8DC'],
+                    ticks: 200,
+                    gravity: 0.8,
+                    scalar: 1.1,
+                    drift: 0,
+                    disableForReducedMotion: true
+                });
                 setTimeout(() => {
                     confetti({ particleCount: 80, angle: 60, spread: 55, origin: { x: 0, y: 0.65 }, colors: ['#FFD700', '#FFF8DC'] });
                     confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.65 }, colors: ['#FFD700', '#FFF8DC'] });
                 }, 200);
-            } catch(e) {}
+            } catch(e) { console.log('Confetti error:', e); }
         }
 
         // ===================== WIN/LOSS RESULT POPUP =====================
         function listenForBetResults() {
             if(!currentUser) return;
-            if(betResultsQueryRef) { betResultsQueryRef.off('value'); betResultsQueryRef = null; }
+            // Remove old listener first to prevent duplicates
+            if(betResultsQueryRef) {
+                betResultsQueryRef.off('value');
+                betResultsQueryRef = null;
+            }
             betResultsQueryRef = db.ref('userBets/' + currentUser.uid).orderByKey().limitToLast(20);
             betResultsQueryRef.on('value', async snap => {
                 const bets = snap.val() || {};
                 for(const [betId, bet] of Object.entries(bets)) {
-                    if(bet.processed && !shownResults.has(betId)) {
-                        shownResults.add(betId);
+                    if(bet.processed && !shownResults[betId]) {
+                        shownResults[betId] = true;
                         saveShownResults();
                         await showResultPopup(bet);
                     }
@@ -2770,10 +3118,14 @@
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
 
+            // CRITICAL FIX: Always use the bet's OWN stored result data.
+            // Re-fetching from game/results can show a different result if
+            // the result was overwritten (e.g., by processMissedBets bug).
             let resultNum = bet.result !== undefined ? bet.result : '?';
             let resultColor = bet.resultColor || 'Green';
             let resultSize = bet.resultSize || '-';
 
+            // Validate stored result data is complete
             if(resultNum === '?' || !resultColor || resultSize === '-') {
                 try {
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
@@ -2783,28 +3135,42 @@
                         if(!resultColor) resultColor = actualResult.color || 'Green';
                         if(resultSize === '-') resultSize = actualResult.size || 'Small';
                     }
-                } catch(e) {}
+                } catch(e) { console.error('Error fetching result for popup:', e); }
             }
 
+            // Cancel any existing popup timer
             if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
+
+            // Reset animations by removing/re-adding animation classes
             winBox.style.display = 'none';
             lossBox.style.display = 'none';
 
             if(bet.win === true) {
+                // Show and animate win popup
                 winBox.style.display = 'block';
                 winBox.classList.remove('vip-popup-exit');
+                // Re-trigger entrance animation
                 winBox.style.animation = 'none';
-                winBox.offsetHeight;
+                winBox.offsetHeight; // force reflow
                 winBox.style.animation = '';
+
+                // Update result tags
                 const colorTag = document.getElementById('winResultColor');
                 colorTag.textContent = resultColor;
                 colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
                 document.getElementById('winResultNumber').textContent = resultNum;
                 document.getElementById('winResultSize').textContent = resultSize;
-                document.getElementById('winBonusAmount').textContent = 'Rs ' + Number(bet.winAmount || 0).toFixed(2);
+                document.getElementById('winBonusAmount').textContent = 'Rs ' + (bet.winAmount || 0).toFixed(2);
                 document.getElementById('winPeriodInfo').innerHTML = 'Period: WinGo 30sec<br>' + (bet.period || '-');
+
+                // Reset progress bar
                 const winFill = winBox.querySelector('.vip-progress-fill');
-                if (winFill) { winFill.style.animation = 'none'; winFill.offsetHeight; winFill.style.animation = ''; }
+                if (winFill) {
+                    winFill.style.animation = 'none';
+                    winFill.offsetHeight;
+                    winFill.style.animation = '';
+                }
+
                 let count = 3;
                 document.getElementById('winAutoCloseText').textContent = count + ' seconds auto close';
                 const countdown = setInterval(() => {
@@ -2812,24 +3178,37 @@
                     if(count <= 0) clearInterval(countdown);
                     else document.getElementById('winAutoCloseText').textContent = count + ' seconds auto close';
                 }, 1000);
+
+                // VIP effects
                 startWinParticles();
                 setTimeout(() => fireConfetti(), 100);
                 playWinSound();
             } else {
+                // Show and animate loss popup
                 lossBox.style.display = 'block';
                 lossBox.classList.remove('vip-popup-exit');
+                // Re-trigger entrance animation
                 lossBox.style.animation = 'none';
-                lossBox.offsetHeight;
+                lossBox.offsetHeight; // force reflow
                 lossBox.style.animation = '';
+
+                // Update result tags
                 const colorTag = document.getElementById('lossResultColor');
                 colorTag.textContent = resultColor;
                 colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
                 document.getElementById('lossResultNumber').textContent = resultNum;
                 document.getElementById('lossResultSize').textContent = resultSize;
-                document.getElementById('lossAmount').textContent = '-Rs ' + Number(bet.amount || 0).toFixed(2);
+                document.getElementById('lossAmount').textContent = '-Rs ' + (bet.amount || 0).toFixed(2);
                 document.getElementById('lossPeriodInfo').textContent = 'Period: ' + (bet.period || '-');
+
+                // Reset progress bar
                 const lossFill = lossBox.querySelector('.vip-progress-fill');
-                if (lossFill) { lossFill.style.animation = 'none'; lossFill.offsetHeight; lossFill.style.animation = ''; }
+                if (lossFill) {
+                    lossFill.style.animation = 'none';
+                    lossFill.offsetHeight;
+                    lossFill.style.animation = '';
+                }
+
                 let count = 3;
                 document.getElementById('lossAutoCloseText').textContent = count + ' seconds auto close';
                 const countdown = setInterval(() => {
@@ -2837,9 +3216,11 @@
                     if(count <= 0) clearInterval(countdown);
                     else document.getElementById('lossAutoCloseText').textContent = count + ' seconds auto close';
                 }, 1000);
+
                 stopWinParticles();
                 playLoseSound();
             }
+
             popup.classList.add('active');
             resultPopupTimer = setTimeout(() => { closeResultPopup(); }, 3000);
         }
@@ -2848,9 +3229,16 @@
             const popup = document.getElementById('resultPopup');
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
+
+            // Add exit animation
             const activeBox = winBox.style.display !== 'none' ? winBox : lossBox;
-            if (activeBox && activeBox.style.display !== 'none') activeBox.classList.add('vip-popup-exit');
+            if (activeBox && activeBox.style.display !== 'none') {
+                activeBox.classList.add('vip-popup-exit');
+            }
+
+            // Fade overlay
             popup.style.opacity = '0';
+
             setTimeout(() => {
                 popup.classList.remove('active');
                 popup.style.opacity = '';
@@ -2867,13 +3255,18 @@
             if(e.target === this) closeResultPopup();
         });
 
+        // CRITICAL FIX: When user comes back to app (mobile unlock/tab switch),
+        // process any bets that got stuck pending while they were away
         document.addEventListener('visibilitychange', () => {
             if(!document.hidden && currentUser && isOnline) {
-                setTimeout(() => { processMissedBets(); loadUserData(); }, 800);
+                setTimeout(() => {
+                    processMissedBets();
+                    loadUserData();
+                }, 800);
             }
         });
 
-        // ===================== Betting - FIX #9: Prevent race conditions =====================
+        // ===================== Betting =====================
         function selectMultiplier(el) {
             document.querySelectorAll('.multi-btn').forEach(b => b.classList.remove('active'));
             el.classList.add('active');
@@ -2883,7 +3276,7 @@
 
         function openBetPopup(typeName, betType, selection, odds) {
             if(!currentPeriod) return toast('Game loading, please wait...');
-            if(!isOnline) return toast('You are offline. Please check connection.');
+            if(!isOnline) return toast('You are offline. Please check your connection.');
             const timeLeft = parseInt(document.getElementById('tMin1').textContent)*600 +
                            parseInt(document.getElementById('tMin2').textContent)*60 +
                            parseInt(document.getElementById('tSec1').textContent)*10 +
@@ -2919,83 +3312,81 @@
         }
 
         async function confirmBet() {
-            // FIX: Prevent double-click or race condition in bet placement
-            if(isPlacingBet) return toast('Bet being placed, please wait...');
-            isPlacingBet = true;
+            if(!selectedBet || !selectedAmount || selectedAmount < 1) return toast('Please select an amount (min Rs 1)');
+            if(!currentUser) return toast('Please login first');
+            if(!userData) return toast('User data loading, please wait...');
+            if((userData.balance || 0) < selectedAmount) return toast('Insufficient balance! Deposit to continue.');
+            if(!currentPeriod) return toast('Game initializing, please wait...');
+
+            const timeLeft = parseInt(document.getElementById('tMin1').textContent)*600 +
+                           parseInt(document.getElementById('tMin2').textContent)*60 +
+                           parseInt(document.getElementById('tSec1').textContent)*10 +
+                           parseInt(document.getElementById('tSec2').textContent);
+            if(timeLeft <= 5) { closeBetPopup(); return toast('Betting closed! Wait for next.'); }
+
+            const finalAmount = selectedAmount * currentMultiplier;
+            if((userData.balance || 0) < finalAmount) return toast('Insufficient balance for X' + currentMultiplier + ' multiplier!');
+
+            const betPeriod = currentPeriod;
+            const betData = {
+                userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '',
+                period: betPeriod, betType: selectedBet.betType, selection: selectedBet.selection,
+                typeName: selectedBet.typeName, amount: finalAmount, odds: selectedBet.odds,
+                potentialWin: finalAmount * selectedBet.odds, processed: false, win: false, winAmount: 0,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            const btn = document.getElementById('confirmBetBtn');
+            if(btn.disabled) return;
+            btn.disabled = true;
+            btn.textContent = 'Placing...';
 
             try {
-                if(!selectedBet || !selectedAmount || selectedAmount < 1) { toast('Select amount (min Rs 1)'); return; }
-                if(!currentUser) { toast('Please login first'); return; }
-                if(!userData) { toast('User data loading...'); return; }
-                if((Number(userData.balance) || 0) < selectedAmount) { toast('Insufficient balance!'); return; }
-                if(!currentPeriod) { toast('Game initializing...'); return; }
+                // INSTANT: Deduct balance locally first for instant feel, then sync to Firebase
+                userData.balance = (userData.balance || 0) - finalAmount;
+                updateWalletUI();
 
-                const timeLeft = parseInt(document.getElementById('tMin1').textContent)*600 +
-                               parseInt(document.getElementById('tMin2').textContent)*60 +
-                               parseInt(document.getElementById('tSec1').textContent)*10 +
-                               parseInt(document.getElementById('tSec2').textContent);
-                if(timeLeft <= 5) { closeBetPopup(); toast('Betting closed! Wait for next.'); return; }
+                // INSTANT: Show success immediately, don't wait for Firebase
+                toast('Bet placed! Rs ' + finalAmount + ' (X' + currentMultiplier + ')');
+                closeBetPopup();
 
-                const finalAmount = selectedAmount * currentMultiplier;
-                if((Number(userData.balance) || 0) < finalAmount) { toast('Insufficient balance!'); return; }
+                // INSTANT: All Firebase operations in parallel (no sequential awaits)
+                const balanceRef = db.ref('users/' + currentUser.uid + '/balance');
+                const totalBetRef = db.ref('users/' + currentUser.uid + '/totalBetAmount');
 
-                const betPeriod = currentPeriod;
-                const betData = {
-                    userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '',
-                    period: betPeriod, betType: selectedBet.betType, selection: String(selectedBet.selection),
-                    typeName: selectedBet.typeName, amount: finalAmount, odds: selectedBet.odds,
-                    potentialWin: finalAmount * selectedBet.odds, processed: false, win: false, winAmount: 0,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                };
+                const [balanceSnap, totalBetSnap] = await Promise.all([
+                    balanceRef.once('value'),
+                    totalBetRef.once('value')
+                ]);
 
-                const btn = document.getElementById('confirmBetBtn');
-                if(btn.disabled) return;
-                btn.disabled = true;
-                btn.textContent = 'Placing...';
-
-                // FIX #10: Use Firebase Transaction for atomic balance deduction
-                // NEVER deduct locally first - always use server-side transaction
-                let deductionSuccess = false;
-                let newBalance = 0;
-
-                await db.ref('users/' + currentUser.uid + '/balance').transaction(currentBalance => {
-                    const bal = Number(currentBalance) || 0;
-                    if(bal < finalAmount) return; // Abort - insufficient
-                    newBalance = bal - finalAmount;
-                    deductionSuccess = true;
-                    return newBalance;
-                });
-
-                if(!deductionSuccess) {
+                const currentBalance = Number(balanceSnap.val()) || 0;
+                if(currentBalance < finalAmount) {
+                    // Revert local balance if insufficient
+                    userData.balance = currentBalance;
+                    updateWalletUI();
                     toast('Insufficient balance!');
-                    btn.disabled = false;
-                    btn.textContent = 'Confirm Bet';
-                    await loadUserData();
                     return;
                 }
 
-                // Balance deducted successfully on server - now write bet data
+                // INSTANT: All writes happen in parallel
                 const newBetRef = db.ref('bets/' + betPeriod).push();
                 await Promise.all([
+                    balanceRef.set(currentBalance - finalAmount),
+                    totalBetRef.set((Number(totalBetSnap.val()) || 0) + finalAmount),
                     newBetRef.set(betData),
-                    db.ref('userBets/' + currentUser.uid + '/' + newBetRef.key).set(betData),
-                    db.ref('users/' + currentUser.uid + '/totalBetAmount').transaction(t => (Number(t) || 0) + finalAmount)
+                    db.ref('userBets/' + currentUser.uid + '/' + newBetRef.key).set(betData)
                 ]);
 
-                // Update local balance from server-confirmed value
-                userData.balance = newBalance;
-                updateWalletUI();
-                toast('Bet placed! Rs ' + finalAmount);
-                closeBetPopup();
-
+                // Background: Refresh user data without blocking UI
+                loadUserData();
             } catch(e) {
                 console.error('Bet error:', e);
                 toast('Failed to place bet: ' + e.message);
-                await loadUserData(); // Reload to sync correct balance
+                // Revert local balance on error
+                await loadUserData();
             } finally {
-                isPlacingBet = false;
-                const btn = document.getElementById('confirmBetBtn');
-                if(btn) { btn.disabled = false; btn.textContent = 'Confirm Bet'; }
+                btn.disabled = false;
+                btn.textContent = 'Confirm Bet';
             }
         }
 
@@ -3003,6 +3394,7 @@
         function openDeposit() {
             document.getElementById('depositPopup').classList.add('active');
             updateAdminAccountDisplay();
+            // Show deposit bonus info in popup
             const bonusBox = document.getElementById('depositPopupBonusInfo');
             if(bonusBox && depositBonusSettings && depositBonusSettings.enabled) {
                 bonusBox.style.display = 'block';
@@ -3010,7 +3402,9 @@
                 document.getElementById('popupBonusMin').textContent = (depositBonusSettings.minDeposit || 500);
                 const amt = parseInt(document.getElementById('depAmount').value) || 0;
                 updateDepositBonusCalc(amt);
-            } else if(bonusBox) bonusBox.style.display = 'none';
+            } else if(bonusBox) {
+                bonusBox.style.display = 'none';
+            }
         }
 
         function updateDepositBonusCalc(amount) {
@@ -3018,9 +3412,9 @@
             if(!calcDiv || !depositBonusSettings || !depositBonusSettings.enabled) return;
             if(amount >= (depositBonusSettings.minDeposit || 0)) {
                 const bonus = Math.floor(amount * (depositBonusSettings.bonusPercent || 0) / 100);
-                calcDiv.innerHTML = 'Bonus: <b style="color:#FFD700;">Rs ' + bonus + '</b> (Total: Rs ' + (amount + bonus) + ')';
+                calcDiv.innerHTML = 'Your bonus: <b style="color:#FFD700;">Rs ' + bonus + '</b> (Total: Rs ' + (amount + bonus) + ')';
             } else {
-                calcDiv.innerHTML = 'Deposit <b style="color:#FFD700;">Rs ' + (depositBonusSettings.minDeposit || 500) + '</b>+ for bonus';
+                calcDiv.innerHTML = 'Deposit <b style="color:#FFD700;">Rs ' + (depositBonusSettings.minDeposit || 500) + '</b> or more to get bonus';
             }
         }
 
@@ -3028,8 +3422,8 @@
             document.getElementById('withdrawPopup').classList.add('active');
             await loadUserData();
             await loadSavedAccounts();
-            const totalDeposited = userData ? (Number(userData.totalDeposited) || 0) : 0;
-            const totalBetAmount = userData ? (Number(userData.totalBetAmount) || 0) : 0;
+            const totalDeposited = userData ? (userData.totalDeposited || 0) : 0;
+            const totalBetAmount = userData ? (userData.totalBetAmount || 0) : 0;
             const remaining = Math.max(0, totalDeposited - totalBetAmount);
             document.getElementById('betRemaining').textContent = remaining.toFixed(2);
             document.getElementById('betRemainingInfo').style.display = remaining > 0 ? 'block' : 'none';
@@ -3059,7 +3453,8 @@
                 }
                 await db.ref('deposits').push({
                     userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '',
-                    method: dwMethod, account, amount, trxId, status: 'pending', bonusAmount: bonusAmount,
+                    method: dwMethod, account, amount, trxId, status: 'pending',
+                    bonusAmount: bonusAmount,
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 });
                 closePopup('depositPopup');
@@ -3077,6 +3472,7 @@
         async function submitWithdraw() {
             if(isWithdrawSubmitting) return;
             isWithdrawSubmitting = true;
+
             const submitBtn = document.querySelector('#withdrawPopup .dw-submit');
             const originalBtnText = submitBtn.innerHTML;
             submitBtn.disabled = true;
@@ -3086,36 +3482,39 @@
                 const account = document.getElementById('wdAccount').value.trim();
                 const name = document.getElementById('wdName').value.trim();
                 const amount = parseInt(document.getElementById('wdAmount').value);
-                await loadUserData();
-                const balance = Number(userData ? (userData.balance || 0) : 0);
-                const totalDeposited = Number(userData ? (userData.totalDeposited || 0) : 0);
-                const totalBetAmount = Number(userData ? (userData.totalBetAmount || 0) : 0);
+                const balance = userData ? (userData.balance || 0) : 0;
+                const totalDeposited = userData ? (userData.totalDeposited || 0) : 0;
+                const totalBetAmount = userData ? (userData.totalBetAmount || 0) : 0;
 
                 if(totalBetAmount < totalDeposited) {
                     const remaining = totalDeposited - totalBetAmount;
                     toast('Bet remaining: Rs ' + remaining.toFixed(2) + '. Bet full deposit first.');
                     return;
                 }
-                if(!account || !amount || amount < adminMinWithdraw) { toast('Min withdrawal Rs ' + adminMinWithdraw); return; }
-                if(!name) { toast('Enter account holder name'); return; }
-                if(amount > balance) { toast('Insufficient balance!'); return; }
+                if(!account || !amount || amount < adminMinWithdraw) {
+                    toast('Min withdrawal Rs ' + adminMinWithdraw);
+                    return;
+                }
+                if(!name) {
+                    toast('Enter account holder name');
+                    return;
+                }
+                if(amount > balance) {
+                    toast('Insufficient balance!');
+                    return;
+                }
 
+                // Check if user already has a pending withdrawal
                 const pendingSnap = await db.ref('withdrawals').orderByChild('userId').equalTo(currentUser.uid).once('value');
                 const allWithdrawals = pendingSnap.val() || {};
                 const hasPending = Object.values(allWithdrawals).some(w => w.status === 'pending');
-                if(hasPending) { toast('You have a pending withdrawal. Wait for approval.'); return; }
+                if(hasPending) {
+                    toast('You already have a pending withdrawal. Please wait for approval.');
+                    return;
+                }
 
-                // FIX: Use transaction for atomic balance deduction
-                let wdSuccess = false;
-                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => {
-                    const currentBal = Number(b) || 0;
-                    if(currentBal < amount) return;
-                    wdSuccess = true;
-                    return currentBal - amount;
-                });
-                if(!wdSuccess) { toast('Insufficient balance!'); return; }
-
-                await db.ref('users/' + currentUser.uid + '/totalWithdrawn').transaction(w => (Number(w) || 0) + amount);
+                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (b || 0) - amount);
+                await db.ref('users/' + currentUser.uid + '/totalWithdrawn').transaction(w => (w || 0) + amount);
                 await db.ref('withdrawals').push({
                     userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '',
                     method: dwMethod, account, accountName: name, amount, status: 'pending',
@@ -3125,9 +3524,10 @@
                 document.getElementById('wdAccount').value = '';
                 document.getElementById('wdName').value = '';
                 document.getElementById('wdAmount').value = '';
-                await loadUserData();
+                loadUserData();
                 toast('Withdrawal request submitted!');
-            } catch(e) { toast('Error: ' + e.message);
+            } catch(e) {
+                toast('Error: ' + e.message);
             } finally {
                 isWithdrawSubmitting = false;
                 submitBtn.disabled = false;
@@ -3156,6 +3556,7 @@
                     const snap = await db.ref('withdrawals').orderByChild('userId').equalTo(currentUser.uid).limitToLast(20).once('value');
                     renderTransList(snap.val(), 'withdraw');
                 } else if(type === 'bet') {
+                    // Purani bets cleanup - sirf last 10 periods rakho
                     await cleanupOldBets();
                     const snap = await db.ref('userBets/' + currentUser.uid).limitToLast(50).once('value');
                     const bets = snap.val() || {};
@@ -3167,7 +3568,10 @@
                         div.className = 'trans-item';
                         const stCls = b.processed ? (b.win ? 'status-approved' : 'status-rejected') : 'status-pending';
                         const stText = b.processed ? (b.win ? 'WON' : 'LOST') : 'PENDING';
-                        div.innerHTML = '<div class="trans-info"><div class="trans-type">' + b.typeName + ' - Period ' + (b.period?.slice(-6) || '') + '</div><div class="trans-method">Rs ' + b.amount + ' @ ' + b.odds + 'x | Result: ' + (b.result !== undefined ? b.result : '?') + '</div></div><div style="text-align:right;"><div class="trans-status ' + stCls + '">' + stText + '</div><div class="trans-amount" style="color:' + (b.win?'#00E676':'#FF1744') + ';">' + (b.win?'+':'') + (b.win?Number(b.winAmount).toFixed(2):'0.00') + '</div></div>';
+                        div.innerHTML = '<div class="trans-info"><div class="trans-type">' + b.typeName + ' (' + b.betType + ') - Period ' + (b.period?.slice(-6) || '') + '</div>' +
+                            '<div class="trans-method">Rs ' + b.amount + ' @ ' + b.odds + 'x | Result: ' + (b.result !== undefined ? b.result : '?') + '</div></div>' +
+                            '<div style="text-align:right;"><div class="trans-status ' + stCls + '">' + stText + '</div>' +
+                            '<div class="trans-amount" style="color:' + (b.win?'#00E676':'#FF1744') + ';">' + (b.win?'+':'') + (b.win?b.winAmount:0) + '</div></div>';
                         container.appendChild(div);
                     });
                 }
@@ -3184,7 +3588,11 @@
                 div.className = 'trans-item';
                 const stCls = t.status === 'approved' ? 'status-approved' : t.status === 'rejected' ? 'status-rejected' : 'status-pending';
                 const dateStr = t.timestamp ? new Date(t.timestamp).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '-';
-                div.innerHTML = '<div class="trans-info"><div class="trans-type">' + (type === 'deposit' ? 'Deposit' : 'Withdraw') + ' via ' + t.method + '</div><div class="trans-method">' + t.account + (type === 'deposit' ? ' | Trx: ' + (t.trxId || '-') : ' | ' + (t.accountName || '')) + '</div><div class="trans-method" style="color:#666;font-size:10px;margin-top:3px;"><i class="far fa-clock"></i> ' + dateStr + '</div></div><div style="text-align:right;"><div class="trans-status ' + stCls + '">' + t.status.toUpperCase() + '</div><div class="trans-amount">Rs ' + t.amount + '</div></div>';
+                div.innerHTML = '<div class="trans-info"><div class="trans-type">' + (type === 'deposit' ? 'Deposit' : 'Withdraw') + ' via ' + t.method + '</div>' +
+                    '<div class="trans-method">' + t.account + (type === 'deposit' ? ' | Trx: ' + (t.trxId || '-') : ' | ' + (t.accountName || '')) + '</div>' +
+                    '<div class="trans-method" style="color:#666;font-size:10px;margin-top:3px;"><i class="far fa-clock"></i> ' + dateStr + '</div></div>' +
+                    '<div style="text-align:right;"><div class="trans-status ' + stCls + '">' + t.status.toUpperCase() + '</div>' +
+                    '<div class="trans-amount">Rs ' + t.amount + '</div></div>';
                 container.appendChild(div);
             });
         }
@@ -3208,8 +3616,11 @@
             const message = document.getElementById('ticketMessage').value.trim();
             if(!subject || !message) return toast('Please fill all fields');
             try {
-                await db.ref('tickets').push({ userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '', type, subject, message, status: 'open', timestamp: firebase.database.ServerValue.TIMESTAMP });
-                toast('Ticket submitted!');
+                await db.ref('tickets').push({
+                    userId: currentUser.uid, userName: userData.name || 'User', userPhone: userData.phone || '',
+                    type, subject, message, status: 'open', timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+                toast('Ticket submitted successfully!');
                 hideTicketForm();
             } catch(e) { toast('Error: ' + e.message); }
         }
@@ -3236,10 +3647,13 @@
                     div.className = 'ticket-item';
                     const time = t.timestamp ? new Date(t.timestamp).toLocaleString() : '-';
                     const stColor = t.status === 'open' ? '#448AFF' : '#00E676';
-                    div.innerHTML = '<div class="t-subject">' + (t.subject || 'No Subject') + ' <span style="color:' + stColor + ';font-size:11px;">(' + (t.status || 'open') + ')</span></div><div class="t-msg">' + (t.message || '') + '</div><div class="t-meta"><span>' + t.type + '</span><span>' + time + '</span></div>' + (t.reply ? '<div class="t-reply"><b>Reply:</b> ' + t.reply + '</div>' : '');
+                    div.innerHTML = '<div class="t-subject">' + (t.subject || 'No Subject') + ' <span style="color:' + stColor + ';font-size:11px;">(' + (t.status || 'open') + ')</span></div>' +
+                        '<div class="t-msg">' + (t.message || '') + '</div>' +
+                        '<div class="t-meta"><span>' + t.type + '</span><span>' + time + '</span></div>' +
+                        (t.reply ? '<div class="t-reply"><b>Reply:</b> ' + t.reply + '</div>' : '');
                     container.appendChild(div);
                 });
-            } catch(e) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">Error loading</div>'; }
+            } catch(e) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">Error loading tickets</div>'; }
         }
 
         // ===================== Navigation =====================
@@ -3270,7 +3684,11 @@
         // ===================== Notification System =====================
         function listenNotifications() {
             if(!currentUser) return;
-            if(notifQueryRef) { notifQueryRef.off('value'); notifQueryRef = null; }
+            // Remove old listener first to prevent duplicates
+            if(notifQueryRef) {
+                notifQueryRef.off('value');
+                notifQueryRef = null;
+            }
             notifQueryRef = db.ref('notifications/' + currentUser.uid).orderByChild('timestamp').limitToLast(50);
             notifQueryRef.on('value', snap => {
                 const notifications = snap.val() || {};
@@ -3298,7 +3716,8 @@
                 const snap = await db.ref('notifications/' + currentUser.uid).orderByChild('timestamp').limitToLast(50).once('value');
                 const notifications = snap.val() || {};
                 const list = Object.entries(notifications).reverse();
-                if(!list.length) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;font-size:13px;">No notifications</div>'; return; }
+                if(!list.length) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;font-size:13px;">No notifications yet</div>'; return; }
+
                 container.innerHTML = '';
                 list.forEach(([id, n]) => {
                     const div = document.createElement('div');
@@ -3306,20 +3725,32 @@
                     const typeColors = { success: '#00C853', error: '#FF1744', info: '#448AFF', warning: '#FF9800' };
                     const typeColor = typeColors[n.type] || '#448AFF';
                     const time = n.timestamp ? new Date(n.timestamp).toLocaleString() : '-';
-                    div.innerHTML = '<div class="notif-header"><span class="notif-dot" style="background:' + typeColor + ';"></span><span class="notif-title">' + (n.title || 'Notification') + '</span><span class="notif-time">' + time + '</span></div><div class="notif-msg">' + (n.message || '') + '</div>';
+
+                    div.innerHTML = '<div class="notif-header">' +
+                        '<span class="notif-dot" style="background:' + typeColor + ';"></span>' +
+                        '<span class="notif-title">' + (n.title || 'Notification') + '</span>' +
+                        '<span class="notif-time">' + time + '</span>' +
+                        '</div>' +
+                        '<div class="notif-msg">' + (n.message || '') + '</div>';
+
                     div.onclick = () => markNotificationRead(id, div);
                     container.appendChild(div);
                 });
+
+                // Mark all as read after viewing
                 markAllNotificationsRead();
-            } catch(e) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">Error</div>'; }
+            } catch(e) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">Error loading notifications</div>'; }
         }
 
         async function markNotificationRead(id, el) {
             if(!currentUser) return;
             try {
                 await db.ref('notifications/' + currentUser.uid + '/' + id).update({ read: true });
-                if(el) { el.classList.remove('unread'); el.classList.add('read'); }
-            } catch(e) {}
+                if(el) {
+                    el.classList.remove('unread');
+                    el.classList.add('read');
+                }
+            } catch(e) { console.error('Mark read error:', e); }
         }
 
         async function markAllNotificationsRead() {
@@ -3328,10 +3759,14 @@
                 const snap = await db.ref('notifications/' + currentUser.uid).once('value');
                 const notifications = snap.val() || {};
                 const updates = {};
-                Object.keys(notifications).forEach(id => { if(!notifications[id].read) updates[id + '/read'] = true; });
-                if(Object.keys(updates).length > 0) await db.ref('notifications/' + currentUser.uid).update(updates);
+                Object.keys(notifications).forEach(id => {
+                    if(!notifications[id].read) updates[id + '/read'] = true;
+                });
+                if(Object.keys(updates).length > 0) {
+                    await db.ref('notifications/' + currentUser.uid).update(updates);
+                }
                 updateNotifBadge(0);
-            } catch(e) {}
+            } catch(e) { console.error('Mark all read error:', e); }
         }
 
         // ===================== Gift Code Redeem =====================
@@ -3341,42 +3776,78 @@
             const resultBox = document.getElementById('redeemResult');
             const btn = document.getElementById('redeemGiftBtn');
             if(!code) return toast('Enter a gift code');
+
             btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
             try {
                 const snap = await db.ref('giftCodes/' + code).once('value');
                 const giftData = snap.val();
                 if(!giftData) {
                     resultBox.style.cssText = 'display:block;text-align:center;padding:15px;border-radius:10px;margin-bottom:15px;font-size:14px;font-weight:600;background:rgba(255,23,68,0.1);border:1px solid rgba(255,23,68,0.3);color:#FF1744;';
-                    resultBox.innerHTML = '<i class="fas fa-times-circle"></i> Invalid gift code.';
+                    resultBox.innerHTML = '<i class="fas fa-times-circle"></i> Invalid gift code. Please check and try again.';
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Redeem Code';
                     return;
                 }
                 if(giftData.status === 'used') {
                     resultBox.style.cssText = 'display:block;text-align:center;padding:15px;border-radius:10px;margin-bottom:15px;font-size:14px;font-weight:600;background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3);color:#FF9800;';
-                    resultBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> Code already used.';
+                    resultBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> This gift code has already been used.';
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Redeem Code';
                     return;
                 }
-                const amount = Number(giftData.amount) || 0;
-                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (Number(b) || 0) + amount);
-                await db.ref('giftCodes/' + code).update({ status: 'used', usedBy: currentUser.uid, usedByName: userData.name || 'User', usedAt: firebase.database.ServerValue.TIMESTAMP });
+
+                // Apply gift code
+                const amount = giftData.amount || 0;
+                await db.ref('users/' + currentUser.uid + '/balance').transaction(b => (b || 0) + amount);
+                await db.ref('giftCodes/' + code).update({
+                    status: 'used',
+                    usedBy: currentUser.uid,
+                    usedByName: userData.name || 'User',
+                    usedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+
                 resultBox.style.cssText = 'display:block;text-align:center;padding:15px;border-radius:10px;margin-bottom:15px;font-size:14px;font-weight:600;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:#00C853;';
-                resultBox.innerHTML = '<i class="fas fa-check-circle"></i> Rs ' + amount + ' added!';
+                resultBox.innerHTML = '<i class="fas fa-check-circle"></i> Success! Rs ' + amount + ' has been added to your wallet!';
                 document.getElementById('giftCodeInput').value = '';
                 await loadUserData();
-                toast('Rs ' + amount + ' added!');
+                toast('Rs ' + amount + ' added to your wallet!');
             } catch(e) {
                 resultBox.style.cssText = 'display:block;text-align:center;padding:15px;border-radius:10px;margin-bottom:15px;font-size:14px;font-weight:600;background:rgba(255,23,68,0.1);border:1px solid rgba(255,23,68,0.3);color:#FF1744;';
                 resultBox.innerHTML = '<i class="fas fa-times-circle"></i> Error: ' + e.message;
-            } finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Redeem Code'; }
+            }
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle"></i> Redeem Code';
         }
 
         // ===================== Auto-sync Min Deposit from Admin =====================
+        let adminMinDeposit = 500;
+        let adminMinWithdraw = 200;
+
         function listenMinDeposit() {
-            if(minDepositRef) { minDepositRef.off('value'); minDepositRef = null; }
-            if(minWithdrawRef) { minWithdrawRef.off('value'); minWithdrawRef = null; }
+            // Remove old listeners first to prevent duplicates
+            if(minDepositRef) {
+                minDepositRef.off('value');
+                minDepositRef = null;
+            }
+            if(minWithdrawRef) {
+                minWithdrawRef.off('value');
+                minWithdrawRef = null;
+            }
             minDepositRef = db.ref('game/settings/minDeposit');
-            minDepositRef.on('value', snap => { const val = snap.val(); if(val) { adminMinDeposit = val; updateMinDepositUI(); } });
+            minDepositRef.on('value', snap => {
+                const val = snap.val();
+                if(val) {
+                    adminMinDeposit = val;
+                    console.log('Min deposit updated from admin:', val);
+                    updateMinDepositUI();
+                }
+            });
             minWithdrawRef = db.ref('game/settings/minWithdraw');
-            minWithdrawRef.on('value', snap => { const val = snap.val(); if(val) { adminMinWithdraw = val; updateMinDepositUI(); } });
+            minWithdrawRef.on('value', snap => {
+                const val = snap.val();
+                if(val) {
+                    adminMinWithdraw = val;
+                    console.log('Min withdraw updated from admin:', val);
+                    updateMinDepositUI();
+                }
+            });
         }
 
         // ===================== Toast =====================
