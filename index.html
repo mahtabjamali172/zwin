@@ -2539,9 +2539,9 @@
             const balls = document.getElementById('historyBalls');
             if(balls) balls.innerHTML = '';
 
-            // Clear old shown results to prevent stale result popups
-            shownResults.clear();
-            try { localStorage.removeItem('zwin_shown_results'); } catch(e) {}
+            // CRITICAL FIX: Load shownResults from localStorage to prevent duplicate popups
+            // on page reload. Only clear entries for bets that no longer exist.
+            loadShownResults();
 
             initOnlineDetection();
             historyListenerActive = false;
@@ -2868,19 +2868,34 @@
         async function processMissedBets() {
             if(!currentUser) return;
             try {
+                // CRITICAL FIX: Only process bets for PAST periods where result already exists.
+                // NEVER process current period bets - wait for timer to finish.
                 const snap = await db.ref('userBets/' + currentUser.uid).once('value');
                 const bets = snap.val() || {};
                 let processedCount = 0;
 
+                // Get current period from Firebase to accurately determine past periods
+                const currentPdSnap = await db.ref('game/currentPeriod').once('value');
+                const currentPdData = currentPdSnap.val();
+                const activePeriod = currentPdData ? currentPdData.period : currentPeriod;
+
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed) continue;
+
+                    // SKIP if this bet is for the current/active period - round is still running
+                    if(bet.period === activePeriod) {
+                        console.log('[MissedBets] Skipping current period bet:', bet.period);
+                        continue;
+                    }
 
                     // Check if result exists for this period
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
                     let result = resultSnap.val();
 
-                    // If no result exists, calculate and save one
+                    // CRITICAL FIX: If no result exists for a past period, generate and save one
+                    // This handles edge case where result generation failed
                     if(!result) {
+                        console.log('[MissedBets] No result for past period', bet.period, '- generating');
                         const num = Math.floor(Math.random() * 10);
                         const color = getNumberColor(num);
                         result = {
@@ -3227,19 +3242,25 @@
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
 
+            // CRITICAL FIX: Always use the bet's OWN stored result data.
+            // Re-fetching from game/results can show a different result if
+            // the result was overwritten (e.g., by processMissedBets bug).
             let resultNum = bet.result !== undefined ? bet.result : '?';
             let resultColor = bet.resultColor || 'Green';
             let resultSize = bet.resultSize || '-';
 
-            try {
-                const resultSnap = await db.ref('game/results/' + bet.period).once('value');
-                const actualResult = resultSnap.val();
-                if(actualResult && actualResult.number !== undefined) {
-                    resultNum = actualResult.number;
-                    resultColor = actualResult.color || resultColor;
-                    resultSize = actualResult.size || resultSize;
-                }
-            } catch(e) { console.error('Error fetching result for popup:', e); }
+            // Validate stored result data is complete
+            if(resultNum === '?' || !resultColor || resultSize === '-') {
+                try {
+                    const resultSnap = await db.ref('game/results/' + bet.period).once('value');
+                    const actualResult = resultSnap.val();
+                    if(actualResult && actualResult.number !== undefined) {
+                        if(resultNum === '?') resultNum = actualResult.number;
+                        if(!resultColor) resultColor = actualResult.color || 'Green';
+                        if(resultSize === '-') resultSize = actualResult.size || 'Small';
+                    }
+                } catch(e) { console.error('Error fetching result for popup:', e); }
+            }
 
             // Cancel any existing popup timer
             if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
