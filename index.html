@@ -1642,6 +1642,68 @@
         let isOnline = true;
         let timerSynced = false;
 
+        // ===================== Listener Ref Variables (for cleanup) =====================
+        let historyQueryRef = null;
+        let historyListenerActive = false;
+        let betResultsQueryRef = null;
+        let announcementRef = null;
+        let gameModeRef = null;
+        let notifQueryRef = null;
+        let minDepositRef = null;
+        let minWithdrawRef = null;
+
+        // ===================== Cleanup All Listeners =====================
+        function cleanupAllListeners() {
+            try {
+                // Remove history listener
+                if (historyQueryRef) {
+                    historyQueryRef.off('value');
+                    historyQueryRef = null;
+                }
+                historyListenerActive = false;
+
+                // Remove bet results listener
+                if (betResultsQueryRef) {
+                    betResultsQueryRef.off('value');
+                    betResultsQueryRef = null;
+                }
+
+                // Remove announcement listener
+                if (announcementRef) {
+                    announcementRef.off('value');
+                    announcementRef = null;
+                }
+
+                // Remove game mode listener
+                if (gameModeRef) {
+                    gameModeRef.off('value');
+                    gameModeRef = null;
+                }
+
+                // Remove notifications listener
+                if (notifQueryRef) {
+                    notifQueryRef.off('value');
+                    notifQueryRef = null;
+                }
+
+                // Remove min deposit listener
+                if (minDepositRef) {
+                    minDepositRef.off('value');
+                    minDepositRef = null;
+                }
+
+                // Remove min withdraw listener
+                if (minWithdrawRef) {
+                    minWithdrawRef.off('value');
+                    minWithdrawRef = null;
+                }
+
+                console.log('[Cleanup] All Firebase listeners removed successfully');
+            } catch(e) {
+                console.error('[Cleanup] Error removing listeners:', e);
+            }
+        }
+
         // Persist shownResults to localStorage so we don't show old popups again
         function loadShownResults() {
             try {
@@ -2099,7 +2161,13 @@
         }
 
         function listenGameMode() {
-            db.ref('game/settings/gameMode').on('value', snap => {
+            // Remove old listener first to prevent duplicates
+            if(gameModeRef) {
+                gameModeRef.off('value');
+                gameModeRef = null;
+            }
+            gameModeRef = db.ref('game/settings/gameMode');
+            gameModeRef.on('value', snap => {
                 const mode = snap.val() || 'random';
                 currentGameMode = mode;
                 console.log('Game mode changed to:', mode);
@@ -2118,7 +2186,13 @@
         }
 
         function listenAnnouncement() {
-            db.ref('game/settings/announcement').on('value', snap => {
+            // Remove old listener first to prevent duplicates
+            if(announcementRef) {
+                announcementRef.off('value');
+                announcementRef = null;
+            }
+            announcementRef = db.ref('game/settings/announcement');
+            announcementRef.on('value', snap => {
                 const text = snap.val();
                 if(text) {
                     adminSettings.announcement = text;
@@ -2453,13 +2527,26 @@
 
         // ===================== Game Logic =====================
         async function initGame() {
+            // CRITICAL: Remove ALL old listeners first to prevent duplicates on re-init
+            cleanupAllListeners();
+
+            // Force fresh Firebase connection to avoid stale cached data on page reopen
+            try { firebase.database().goOffline(); firebase.database().goOnline(); } catch(e) {}
+
+            // Clear history UI immediately so user doesn't see old stale data
+            const tbody = document.getElementById('historyBody');
+            if(tbody) tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">Loading...</td></tr>';
+            const balls = document.getElementById('historyBalls');
+            if(balls) balls.innerHTML = '';
+
+            // Clear old shown results to prevent stale result popups
+            shownResults.clear();
+            try { localStorage.removeItem('zwin_shown_results'); } catch(e) {}
+
             initOnlineDetection();
-            // Load persisted shown results so we don't re-show old popups
-            loadShownResults();
             historyListenerActive = false;
 
-            // Load history IMMEDIATELY before anything else (so user sees latest 10 instantly)
-            await loadHistory();
+            // listenHistory() loads data immediately via .on('value') - no need for separate loadHistory()
             listenHistory();
             listenForBetResults();
             listenAnnouncement();
@@ -2763,8 +2850,8 @@
                     } else if(bet.betType === 'number') {
                         if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                     } else if(bet.betType === 'bs') {
-                        if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
-                        else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
+                        if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
+                        else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
                     }
 
                     await betRef.update({ win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
@@ -2835,8 +2922,8 @@
                 } else if(bet.betType === 'number') {
                     if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                 } else if(bet.betType === 'bs') {
-                    if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
-                    else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
+                    if(selection === 'big' && resultSize === 'big') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'small' && resultSize === 'small') { win = true; winAmount = bet.amount * 2; }
                 }
 
                 const updates = {
@@ -2859,12 +2946,16 @@
 
         // ===================== History =====================
         let historyLastUpdated = 0;
-        let historyListenerActive = false;
-
         function listenHistory() {
+            // Remove any existing listener first to prevent duplicates on re-init
+            if (historyQueryRef) {
+                historyQueryRef.off('value');
+                historyQueryRef = null;
+            }
             // Use orderByKey + limitToLast for reliable latest-10 results
             // Period keys are chronologically ordered (e.g. 20260525001, 20260525002)
-            db.ref('game/results').orderByKey().limitToLast(10).on('value', snap => {
+            historyQueryRef = db.ref('game/results').orderByKey().limitToLast(10);
+            historyQueryRef.on('value', snap => {
                 try {
                     const results = snap.val() || {};
                     // Sort by period key descending (newest first)
@@ -3113,7 +3204,13 @@
         // ===================== WIN/LOSS RESULT POPUP =====================
         function listenForBetResults() {
             if(!currentUser) return;
-            db.ref('userBets/' + currentUser.uid).orderByKey().limitToLast(20).on('value', async snap => {
+            // Remove old listener first to prevent duplicates
+            if(betResultsQueryRef) {
+                betResultsQueryRef.off('value');
+                betResultsQueryRef = null;
+            }
+            betResultsQueryRef = db.ref('userBets/' + currentUser.uid).orderByKey().limitToLast(20);
+            betResultsQueryRef.on('value', async snap => {
                 const bets = snap.val() || {};
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed && !shownResults.has(betId)) {
@@ -3690,7 +3787,13 @@
         // ===================== Notification System =====================
         function listenNotifications() {
             if(!currentUser) return;
-            db.ref('notifications/' + currentUser.uid).orderByChild('timestamp').limitToLast(50).on('value', snap => {
+            // Remove old listener first to prevent duplicates
+            if(notifQueryRef) {
+                notifQueryRef.off('value');
+                notifQueryRef = null;
+            }
+            notifQueryRef = db.ref('notifications/' + currentUser.uid).orderByChild('timestamp').limitToLast(50);
+            notifQueryRef.on('value', snap => {
                 const notifications = snap.val() || {};
                 const list = Object.entries(notifications).reverse();
                 let unreadCount = 0;
@@ -3821,7 +3924,17 @@
         let adminMinWithdraw = 200;
 
         function listenMinDeposit() {
-            db.ref('game/settings/minDeposit').on('value', snap => {
+            // Remove old listeners first to prevent duplicates
+            if(minDepositRef) {
+                minDepositRef.off('value');
+                minDepositRef = null;
+            }
+            if(minWithdrawRef) {
+                minWithdrawRef.off('value');
+                minWithdrawRef = null;
+            }
+            minDepositRef = db.ref('game/settings/minDeposit');
+            minDepositRef.on('value', snap => {
                 const val = snap.val();
                 if(val) {
                     adminMinDeposit = val;
@@ -3829,7 +3942,8 @@
                     updateMinDepositUI();
                 }
             });
-            db.ref('game/settings/minWithdraw').on('value', snap => {
+            minWithdrawRef = db.ref('game/settings/minWithdraw');
+            minWithdrawRef.on('value', snap => {
                 const val = snap.val();
                 if(val) {
                     adminMinWithdraw = val;
