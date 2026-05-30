@@ -110,7 +110,6 @@
         .h-ball::after { content:''; position:absolute; inset:-2px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); }
         .ball-green { background:linear-gradient(135deg,#00E676,#00C853); }
         .ball-red { background:linear-gradient(135deg,#FF1744,#D50000); }
-        .ball-violet { background:linear-gradient(135deg,#7C4DFF,#651FFF); }
 
         .game-timer-box { text-align:right; }
         .game-timer-label { font-size:11px; color:rgba(0,0,0,0.6); font-weight:600; }
@@ -130,7 +129,6 @@
         .color-btns { display:flex; gap:8px; margin:0 12px 10px; }
         .color-btn { flex:1; padding:12px 8px; border-radius:10px; border:none; font-size:15px; font-weight:800; cursor:pointer; color:#fff; display:flex; align-items:center; justify-content:center; gap:5px; transition:all 0.3s; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
         .color-btn.green { background:linear-gradient(135deg,#00E676,#00C853); }
-        .color-btn.violet { background:linear-gradient(135deg,#7C4DFF,#651FFF); }
         .color-btn.red { background:linear-gradient(135deg,#FF1744,#D50000); }
         .color-btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.4); }
         .color-btn:active { transform:scale(0.95); }
@@ -146,7 +144,6 @@
         .num-btn::after { content:''; position:absolute; bottom:8%; right:12%; width:25%; height:20%; border-radius:50%; background:radial-gradient(ellipse at center, rgba(255,255,255,0.15), transparent 70%); pointer-events:none; }
         .n-green { background:radial-gradient(circle at 35% 35%, #00E676 0%, #00C853 40%, #009624 100%); box-shadow:0 4px 12px rgba(0,200,83,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(0,230,118,0.5); }
         .n-red { background:radial-gradient(circle at 35% 35%, #FF5252 0%, #FF1744 40%, #B71C1C 100%); box-shadow:0 4px 12px rgba(255,23,68,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(255,82,82,0.5); }
-        .n-violet { background:radial-gradient(circle at 35% 35%, #B388FF 0%, #7C4DFF 40%, #4527A0 100%); box-shadow:0 4px 12px rgba(124,77,255,0.4), inset 0 -3px 8px rgba(0,0,0,0.3), inset 0 3px 8px rgba(255,255,255,0.25); border:1.5px solid rgba(179,136,255,0.5); }
 
         /* ===== MULTIPLIER BUTTONS ===== */
         .multiplier-btns { display:flex; gap:6px; margin-bottom:10px; }
@@ -267,20 +264,15 @@
         .hist-ball::before { content:''; position:absolute; top:12%; left:15%; width:35%; height:30%; border-radius:50%; background:radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.6), rgba(255,255,255,0.1) 60%, transparent 70%); pointer-events:none; }
         .hist-ball.hist-green { background:radial-gradient(circle at 35% 35%, #00E676 0%, #00C853 40%, #009624 100%); }
         .hist-ball.hist-red { background:radial-gradient(circle at 35% 35%, #FF5252 0%, #FF1744 40%, #B71C1C 100%); }
-        .hist-ball.hist-violet { background:radial-gradient(circle at 35% 35%, #B388FF 0%, #7C4DFF 40%, #4527A0 100%); }
-        .hist-ball.hist-red-violet { background:radial-gradient(circle at 35% 35%, #E040FB 0%, #7C4DFF 30%, #FF1744 70%, #B71C1C 100%); }
         .hist-num { font-size:16px; font-weight:800; font-family:'JetBrains Mono',monospace; }
         .hist-num.green { color:#00E676; }
         .hist-num.red { color:#FF1744; }
-        .hist-num.violet { color:#7C4DFF; }
         .hist-bs { font-size:13px; font-weight:700; }
         .hist-bs.big { color:#FF9800; }
         .hist-bs.small { color:#448AFF; }
         .hist-color-dot { width:14px; height:14px; border-radius:50%; display:inline-block; box-shadow:0 1px 4px rgba(0,0,0,0.3); }
         .hist-color-dot.green { background:linear-gradient(135deg,#00E676,#00C853); }
         .hist-color-dot.red { background:linear-gradient(135deg,#FF1744,#D50000); }
-        .hist-color-dot.violet { background:linear-gradient(135deg,#7C4DFF,#651FFF); }
-        .hist-color-dot.red-violet { background: linear-gradient(135deg, #FF1744 50%, #7C4DFF 50%); }
 
         /* ===== BET POPUP ===== */
         .popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; display:none; align-items:flex-end; justify-content:center; backdrop-filter:blur(4px); }
@@ -757,7 +749,6 @@
 
         .vip-result-tag.rt-color-red { background: rgba(255,23,68,0.6); border: 1px solid rgba(255,23,68,0.4); }
         .vip-result-tag.rt-color-green { background: rgba(0,230,118,0.5); border: 1px solid rgba(0,230,118,0.35); }
-        .vip-result-tag.rt-color-violet { background: rgba(124,77,255,0.5); border: 1px solid rgba(124,77,255,0.35); }
         .vip-result-tag.rt-num { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
         .vip-result-tag.rt-size { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
 
@@ -1062,10 +1053,9 @@
                     </div>
                 </div>
 
-                <!-- Color Buttons - Green Violet Red -->
+                <!-- Color Buttons - Green Red -->
                 <div class="color-btns">
                     <button class="color-btn green" onclick="openBetPopup('Green','color','green',2)">Green</button>
-                    <button class="color-btn violet" onclick="openBetPopup('Violet','color','violet',2)">Violet</button>
                     <button class="color-btn red" onclick="openBetPopup('Red','color','red',2)">Red</button>
                 </div>
 
@@ -1073,12 +1063,12 @@
                 <div class="number-section">
                     <!-- Number Balls 0-9 -->
                     <div class="number-grid">
-                        <button class="num-btn n-violet" onclick="openBetPopup('0','number',0,9)">0</button>
+                        <button class="num-btn n-red" onclick="openBetPopup('0','number',0,9)">0</button>
                         <button class="num-btn n-green" onclick="openBetPopup('1','number',1,9)">1</button>
                         <button class="num-btn n-red" onclick="openBetPopup('2','number',2,9)">2</button>
                         <button class="num-btn n-green" onclick="openBetPopup('3','number',3,9)">3</button>
                         <button class="num-btn n-red" onclick="openBetPopup('4','number',4,9)">4</button>
-                        <button class="num-btn n-violet" onclick="openBetPopup('5','number',5,9)">5</button>
+                        <button class="num-btn n-green" onclick="openBetPopup('5','number',5,9)">5</button>
                         <button class="num-btn n-red" onclick="openBetPopup('6','number',6,9)">6</button>
                         <button class="num-btn n-green" onclick="openBetPopup('7','number',7,9)">7</button>
                         <button class="num-btn n-red" onclick="openBetPopup('8','number',8,9)">8</button>
@@ -1266,11 +1256,10 @@
             <div class="rules-box">
                 <h4><i class="fas fa-info-circle" style="color:#FFD700;"></i> Game Rules</h4>
                 <p>1. Zwin WinGo is a 30-second lottery game. A new round starts every 30 seconds</p>
-                <p>2. You can bet on <b>Color</b> (Green/Violet/Red), <b>Number</b> (0-9), or <b>Big/Small</b>.</p>
+                <p>2. You can bet on <b>Color</b> (Green/Red), <b>Number</b> (0-9), or <b>Big/Small</b>.</p>
                 <h4><i class="fas fa-palette" style="color:#FFD700;"></i> Color Rules</h4>
                 <p><b style="color:#00E676;">Green:</b> Win if result is 1,3,7,9. (Pays 2x)</p>
-                <p><b style="color:#7C4DFF;">Violet:</b> Win if result is 0,5. (Pays 2x)</p>
-                <p><b style="color:#FF1744;">Red:</b> Win if result is 2,4,6,8. (Pays 2x)</p>
+                <p><b style="color:#FF1744;">Red:</b> Win if result is 0,2,4,6,8. (Pays 2x)</p>
                 <h4><i class="fas fa-sort-numeric-up" style="color:#FFD700;"></i> Number Rules</h4>
                 <p>Bet on any number 0-9. If your number matches, you win 9x your bet!</p>
                 <h4><i class="fas fa-expand-arrows-alt" style="color:#FFD700;"></i> Big/Small Rules</h4>
@@ -2131,16 +2120,11 @@
             try {
                 const snap = await db.ref('game/settings').once('value');
                 adminSettings = snap.val() || {};
-                // FIX: Only set currentGameMode if listener hasn't already set it
-                // The listenGameMode() should be the primary source of truth
-                const modeSnap = await db.ref('game/settings/gameMode').once('value');
-                const mode = modeSnap.val() || 'random';
-                currentGameMode = mode;
+                currentGameMode = adminSettings.gameMode || 'random';
                 adminMinDeposit = adminSettings.minDeposit || 500;
                 adminMinWithdraw = adminSettings.minWithdraw || 200;
                 updateAnnouncement();
                 updateMinDepositUI();
-                console.log('[AdminSettings] Game mode loaded:', currentGameMode);
             } catch(e) { console.error('Admin settings error:', e); }
         }
 
@@ -2174,9 +2158,8 @@
             gameModeRef = db.ref('game/settings/gameMode');
             gameModeRef.on('value', snap => {
                 const mode = snap.val() || 'random';
-                // FIX: Validate mode is either 'random' or 'evil', default to 'random'
-                currentGameMode = (mode === 'evil') ? 'evil' : 'random';
-                console.log('[GameMode] Mode updated to:', currentGameMode);
+                currentGameMode = mode;
+                console.log('Game mode changed to:', mode);
             });
         }
 
@@ -2525,13 +2508,9 @@
                 entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
                 const toDelete = entries.slice(0, entries.length - KEEP_LAST_N_RESULTS);
                 const updates = {};
-                toDelete.forEach(([period, _]) => { 
-                    updates['game/results/' + period] = null; 
-                    // FIX: Also clean up result locks for old periods
-                    updates['game/resultLocks/' + period] = null;
-                });
+                toDelete.forEach(([period, _]) => { updates['game/results/' + period] = null; });
                 await db.ref().update(updates);
-                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results and locks');
+                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results');
             } catch(e) { console.error('[Results Cleanup] Error:', e); }
         }
 
@@ -2647,23 +2626,22 @@
                 const currentSeq = parseInt(currentPeriod.slice(-3));
                 const missedCount = currentSeq - lastSeq - 1;
 
-                // FIX: If more than 3 periods missed, skip backfill entirely.
-                // Random backfills cause history to show confusing/random results.
+                // CRITICAL FIX: If more than 10 periods missed, skip backfill entirely.
+                // This prevents the "jumping" issue where periods slowly catch up.
+                // We only keep last 10 results anyway, so old gaps don't matter.
                 if(missedCount <= 0) return;
-                if(missedCount > 3) {
-                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping to avoid random history entries.');
+                if(missedCount > 10) {
+                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping. Only last 10 kept anyway.');
                     return;
                 }
 
-                // FIX: Only backfill up to 3 most recent missed periods
+                // Only backfill the most recent missed periods (up to 10)
                 for(let i = 1; i <= missedCount; i++) {
                     const missedSeq = lastSeq + i;
                     const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
                     const existing = await db.ref('game/results/' + missedPeriod).once('value');
                     if(existing.exists()) continue;
-                    // FIX: Use deterministic "random" based on period hash for consistency
-                    const hash = hashCode(missedPeriod);
-                    const num = Math.abs(hash % 10);
+                    const num = Math.floor(Math.random() * 10);
                     const color = getNumberColor(num);
                     await db.ref('game/results/' + missedPeriod).set({
                         period: missedPeriod,
@@ -2740,15 +2718,11 @@
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
                 const result = await calculateHouseFavorableResult(resultPeriod);
-                // FIX: Only save result if it wasn't already saved by another client
-                const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
-                if(!existingSnap.exists()) {
-                    await db.ref('game/results/' + resultPeriod).set(result);
-                }
+                await db.ref('game/results/' + resultPeriod).set(result);
                 await db.ref('game/lastResult').set(result);
-                // FIX: Always process bets for this period (transaction-safe)
                 await processBetsSafely(resultPeriod, result);
-                // Cleanup old data after result is processed
+                // Naya result save hone ke baad purana data auto-delete kar do
+                // Sirf last 10 history + current period rakho, baaki sab delete
                 await cleanupOldResults();
                 await cleanupOldBets();
             } catch(e) { console.error('Result error:', e); }
@@ -2757,43 +2731,20 @@
         async function calculateHouseFavorableResult(period) {
             const fallbackNum = Math.floor(Math.random() * 10);
             try {
-                // FIX: Check if admin has set a forced result for this period
-                const forcedSnap = await db.ref('game/forcedResult').once('value');
-                const forcedResult = forcedSnap.val();
-                if(forcedResult && forcedResult.period === period && forcedResult.number !== undefined) {
-                    console.log('[Result] Using admin forced result:', forcedResult.number, forcedResult.color);
-                    // Clear the forced result after using it so it doesn't apply to next period
-                    await db.ref('game/forcedResult').remove();
-                    return {
-                        period: period,
-                        number: forcedResult.number,
-                        color: forcedResult.color,
-                        size: forcedResult.size,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP,
-                        forced: true
-                    };
-                }
-
-                // FIX: Use a lock to ensure only one client generates the result for this period
-                const lockRef = db.ref('game/resultLocks/' + period);
-                const lockSnap = await lockRef.once('value');
-                if(lockSnap.exists()) {
-                    // Another client already generated the result, return it
-                    const existingResult = lockSnap.val();
-                    if(existingResult && existingResult.number !== undefined) {
-                        return existingResult;
-                    }
-                }
-
                 const betsSnap = await db.ref('bets/' + period).once('value');
                 const bets = betsSnap.val();
-                let result;
-
                 if(!bets) {
                     const color = getNumberColor(fallbackNum);
-                    result = { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-                } else if(currentGameMode === 'evil') {
-                    // EVIL MODE: Pick the number that minimizes total payout
+                    return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'random') {
+                    const randomNum = Math.floor(Math.random() * 10);
+                    const color = getNumberColor(randomNum);
+                    return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'evil') {
                     const payouts = [];
                     for(let num = 0; num <= 9; num++) {
                         const color = getNumberColor(num);
@@ -2801,42 +2752,30 @@
                         let totalPayout = 0;
                         Object.values(bets).forEach(bet => {
                             if(bet.processed) return;
-                            // FIX: Ensure amount is a number and normalize selection
-                            const betAmount = Number(bet.amount) || 0;
-                            const selection = (bet.selection || '').toString().toLowerCase();
-                            let win = false;
-                            let winAmount = 0;
+                            let win = false; let winAmount = 0;
                             if(bet.betType === 'color') {
-                                if(selection === 'green' && color === 'Green') { win = true; winAmount = betAmount * 2; }
-                                else if(selection === 'red' && color === 'Red') { win = true; winAmount = betAmount * 2; }
-                                else if(selection === 'violet' && color === 'Violet') { win = true; winAmount = betAmount * 2; }
+                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
                             } else if(bet.betType === 'number') {
-                                if(parseInt(bet.selection) === num) { win = true; winAmount = betAmount * 9; }
+                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
                             } else if(bet.betType === 'bs') {
-                                if(selection === 'big' && size === 'Big') { win = true; winAmount = betAmount * 2; }
-                                else if(selection === 'small' && size === 'Small') { win = true; winAmount = betAmount * 2; }
+                                if(bet.selection === 'big' && size === 'Big') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'small' && size === 'Small') { win = true; winAmount = bet.amount * 2; }
                             }
                             if(win) totalPayout += winAmount;
                         });
                         payouts.push({ number: num, color, size, payout: totalPayout });
                     }
-                    // Sort by payout ascending (least payout = best for house)
                     payouts.sort((a, b) => {
                         if(a.payout !== b.payout) return a.payout - b.payout;
                         return Math.random() - 0.5;
                     });
                     const best = payouts[0];
-                    result = { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
-                } else {
-                    // RANDOM MODE (default): Truly random
-                    const randomNum = Math.floor(Math.random() * 10);
-                    const color = getNumberColor(randomNum);
-                    result = { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                    return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
 
-                // Save the lock first to prevent other clients from generating different results
-                await lockRef.set(result);
-                return result;
+                const color = getNumberColor(fallbackNum);
+                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
             } catch(e) {
                 console.error('House calc error:', e);
                 const color = getNumberColor(fallbackNum);
@@ -2855,7 +2794,8 @@
         }
 
         function getNumberColor(num) {
-            if(num === 0 || num === 5) return 'Violet';
+            // Green = Odd numbers (1,3,5,7,9)
+            // Red = Even numbers (0,2,4,6,8)
             if(num % 2 === 1) return 'Green';
             return 'Red';
         }
@@ -2874,9 +2814,6 @@
                     let claimed = false;
                     let win = false;
                     let winAmount = 0;
-                    // FIX: Ensure amount is always a number
-                    const betAmount = Number(bet.amount) || 0;
-                    if(betAmount <= 0) continue;
 
                     await betRef.transaction(current => {
                         if(!current || current.processed) return current;
@@ -2888,23 +2825,19 @@
 
                     const selection = (bet.selection || '').toString().toLowerCase();
                     if(bet.betType === 'color') {
-                        if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = betAmount * 2; }
-                        else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = betAmount * 2; }
-                        else if(selection === 'violet' && resultColor === 'Violet') { win = true; winAmount = betAmount * 2; }
+                        if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = bet.amount * 2; }
+                        else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = bet.amount * 2; }
                     } else if(bet.betType === 'number') {
-                        if(parseInt(bet.selection) === resultNum) { win = true; winAmount = betAmount * 9; }
+                        if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                     } else if(bet.betType === 'bs') {
-                        if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = betAmount * 2; }
-                        else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = betAmount * 2; }
+                        if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
+                        else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
                     }
-
-                    // FIX: Ensure winAmount is never negative, always a number
-                    winAmount = Math.max(0, Number(winAmount) || 0);
 
                     await betRef.update({ win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
                     await db.ref('userBets/' + bet.userId + '/' + betId).update({ processed: true, win, winAmount, result: resultNum, resultColor: result.color, resultSize: result.size });
-                    if(win && winAmount > 0) {
-                        await db.ref('users/' + bet.userId + '/balance').transaction(b => (Number(b) || 0) + winAmount);
+                    if(win) {
+                        await db.ref('users/' + bet.userId + '/balance').transaction(b => (b || 0) + winAmount);
                     }
                 }
                 loadUserData();
@@ -2958,26 +2891,19 @@
                 const resultColor = (result.color || '').toString();
                 const resultSize = (result.size || '').toString();
                 const selection = (bet.selection || '').toString().toLowerCase();
-                // FIX: Ensure amount is always a number
-                const betAmount = Number(bet.amount) || 0;
-                if(betAmount <= 0) return;
 
                 let win = false;
                 let winAmount = 0;
 
                 if(bet.betType === 'color') {
-                    if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = betAmount * 2; }
-                    else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = betAmount * 2; }
-                    else if(selection === 'violet' && resultColor === 'Violet') { win = true; winAmount = betAmount * 2; }
+                    if(selection === 'green' && resultColor === 'Green') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'red' && resultColor === 'Red') { win = true; winAmount = bet.amount * 2; }
                 } else if(bet.betType === 'number') {
-                    if(parseInt(bet.selection) === resultNum) { win = true; winAmount = betAmount * 9; }
+                    if(parseInt(bet.selection) === resultNum) { win = true; winAmount = bet.amount * 9; }
                 } else if(bet.betType === 'bs') {
-                    if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = betAmount * 2; }
-                    else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = betAmount * 2; }
+                    if(selection === 'big' && resultSize === 'Big') { win = true; winAmount = bet.amount * 2; }
+                    else if(selection === 'small' && resultSize === 'Small') { win = true; winAmount = bet.amount * 2; }
                 }
-
-                // FIX: Ensure winAmount is never negative, always a number
-                winAmount = Math.max(0, Number(winAmount) || 0);
 
                 const updates = {
                     processed: true,
@@ -2991,8 +2917,8 @@
                 await db.ref('bets/' + bet.period + '/' + betId).update(updates);
                 await db.ref('userBets/' + bet.userId + '/' + betId).update(updates);
 
-                if(win && winAmount > 0) {
-                    await db.ref('users/' + bet.userId + '/balance').transaction(b => (Number(b) || 0) + winAmount);
+                if(win) {
+                    await db.ref('users/' + bet.userId + '/balance').transaction(b => (b || 0) + winAmount);
                 }
             } catch(e) { console.error('[processSingleBet] Error:', e); }
         }
@@ -3021,7 +2947,6 @@
                             const ball = document.createElement('div');
                             let cls = 'ball-red';
                             if(r.color === 'Green') cls = 'ball-green';
-                            else if(r.color === 'Violet') cls = 'ball-violet';
                             ball.className = 'h-ball ' + cls;
                             ball.textContent = r.number;
                             ballsContainer.appendChild(ball);
@@ -3033,22 +2958,14 @@
                         tbody.innerHTML = '';
                         list.slice(0, 10).forEach(([period, r]) => {
                             const tr = document.createElement('tr');
-                            const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
+                            const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
                             const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
                             // Color dot class
                             let dotCls = 'hist-color-dot red';
                             if(r.color === 'Green') dotCls = 'hist-color-dot green';
-                            else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
-                            // Handle numbers 0 and 5 which are Red+Violet
-                            if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
-                            if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
                             // Colored ball for number
                             let ballCls = 'hist-ball';
                             if(numCls.includes('green')) ballCls += ' hist-green';
-                            else if(numCls.includes('violet')) {
-                                if(r.number == 0 || r.number == 5) ballCls += ' hist-red-violet';
-                                else ballCls += ' hist-violet';
-                            }
                             else ballCls += ' hist-red';
                             tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
                                 '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
@@ -3093,7 +3010,6 @@
                         const ball = document.createElement('div');
                         let cls = 'ball-red';
                         if(r.color === 'Green') cls = 'ball-green';
-                        else if(r.color === 'Violet') cls = 'ball-violet';
                         ball.className = 'h-ball ' + cls;
                         ball.textContent = r.number;
                         ballsContainer.appendChild(ball);
@@ -3105,20 +3021,13 @@
                     tbody.innerHTML = '';
                     list.slice(0, 10).forEach(([period, r]) => {
                         const tr = document.createElement('tr');
-                        const numCls = r.color === 'Green' ? 'hist-num green' : r.color === 'Violet' ? 'hist-num violet' : 'hist-num red';
+                        const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
                         const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
                         let dotCls = 'hist-color-dot red';
                         if(r.color === 'Green') dotCls = 'hist-color-dot green';
-                        else if(r.color === 'Violet') dotCls = 'hist-color-dot violet';
-                        if(r.number === 0 || r.number === '0') dotCls = 'hist-color-dot red-violet';
-                        if(r.number === 5 || r.number === '5') dotCls = 'hist-color-dot red-violet';
                         // Colored ball for number
                         let ballCls = 'hist-ball';
                         if(numCls.includes('green')) ballCls += ' hist-green';
-                        else if(numCls.includes('violet')) {
-                            if(r.number == 0 || r.number == 5) ballCls += ' hist-red-violet';
-                            else ballCls += ' hist-violet';
-                        }
                         else ballCls += ' hist-red';
                         tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
                             '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
@@ -3142,7 +3051,7 @@
                 this.ctx = canvas.getContext('2d');
                 this.particles = [];
                 this.maxParticles = 60;
-                this.colors = ['#FFD700', '#FFF8DC', '#7C4DFF', '#FFE55C', '#E8D5F7'];
+                this.colors = ['#FFD700', '#FFF8DC', '#FF1744', '#FFE55C', '#00E676'];
                 this.rafId = null;
                 this.resize();
                 this.init();
@@ -3240,7 +3149,7 @@
                     particleCount: 150,
                     spread: 70,
                     origin: { y: 0.58 },
-                    colors: ['#FFD700', '#7C4DFF', '#E91E63', '#00E676', '#FFF8DC'],
+                    colors: ['#FFD700', '#FF1744', '#E91E63', '#00E676', '#FFF8DC'],
                     ticks: 200,
                     gravity: 0.8,
                     scalar: 1.1,
@@ -3262,30 +3171,14 @@
                 betResultsQueryRef.off('value');
                 betResultsQueryRef = null;
             }
-            // FIX: Only listen for recent bets (last 20) and filter by timestamp
             betResultsQueryRef = db.ref('userBets/' + currentUser.uid).orderByKey().limitToLast(20);
             betResultsQueryRef.on('value', async snap => {
                 const bets = snap.val() || {};
-                // FIX: Only show popups for bets from the last 3 minutes
-                const now = Date.now();
-                const CUTOFF_MS = 3 * 60 * 1000; // 3 minutes
                 for(const [betId, bet] of Object.entries(bets)) {
-                    // Skip if already shown
-                    if(shownResults.has(betId)) continue;
-                    // Only show if bet is processed AND has a result
-                    if(bet.processed && bet.result !== undefined) {
-                        const betTime = bet.timestamp || 0;
-                        // Only show popup for recent bets (prevent old popups on refresh)
-                        if(typeof betTime === 'number' && (now - betTime) < CUTOFF_MS) {
-                            shownResults.add(betId);
-                            saveShownResults();
-                            await showResultPopup(bet);
-                        } else if(typeof betTime !== 'number') {
-                            // If timestamp is server timestamp (object), show it (it's recent)
-                            shownResults.add(betId);
-                            saveShownResults();
-                            await showResultPopup(bet);
-                        }
+                    if(bet.processed && !shownResults.has(betId)) {
+                        shownResults.add(betId);
+                        saveShownResults();
+                        await showResultPopup(bet);
                     }
                 }
             });
@@ -3329,10 +3222,10 @@
                 // Update result tags
                 const colorTag = document.getElementById('winResultColor');
                 colorTag.textContent = resultColor;
-                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
+                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : 'red');
                 document.getElementById('winResultNumber').textContent = resultNum;
                 document.getElementById('winResultSize').textContent = resultSize;
-                document.getElementById('winBonusAmount').textContent = 'Rs ' + (Number(bet.winAmount) || 0).toFixed(2);
+                document.getElementById('winBonusAmount').textContent = 'Rs ' + (bet.winAmount || 0).toFixed(2);
                 document.getElementById('winPeriodInfo').innerHTML = 'Period: WinGo 30sec<br>' + (bet.period || '-');
 
                 // Reset progress bar
@@ -3367,10 +3260,10 @@
                 // Update result tags
                 const colorTag = document.getElementById('lossResultColor');
                 colorTag.textContent = resultColor;
-                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : resultColor === 'Violet' ? 'violet' : 'red');
+                colorTag.className = 'vip-result-tag rt-color-' + (resultColor === 'Green' ? 'green' : 'red');
                 document.getElementById('lossResultNumber').textContent = resultNum;
                 document.getElementById('lossResultSize').textContent = resultSize;
-                document.getElementById('lossAmount').textContent = '-Rs ' + (Number(bet.amount) || 0).toFixed(2);
+                document.getElementById('lossAmount').textContent = '-Rs ' + (bet.amount || 0).toFixed(2);
                 document.getElementById('lossPeriodInfo').textContent = 'Period: ' + (bet.period || '-');
 
                 // Reset progress bar
@@ -3740,16 +3633,10 @@
                         div.className = 'trans-item';
                         const stCls = b.processed ? (b.win ? 'status-approved' : 'status-rejected') : 'status-pending';
                         const stText = b.processed ? (b.win ? 'WON' : 'LOST') : 'PENDING';
-                        // FIX: Ensure amounts are numbers
-                        const betAmt = Number(b.amount) || 0;
-                        const winAmt = Number(b.winAmount) || 0;
-                        const oddsVal = Number(b.odds) || 1;
-                        // FIX: Show lost amount for losses instead of 0
-                        const displayAmount = b.win ? ('+Rs ' + winAmt.toFixed(2)) : (b.processed ? ('-Rs ' + betAmt.toFixed(2)) : 'Pending');
                         div.innerHTML = '<div class="trans-info"><div class="trans-type">' + b.typeName + ' (' + b.betType + ') - Period ' + (b.period?.slice(-6) || '') + '</div>' +
-                            '<div class="trans-method">Rs ' + betAmt.toFixed(2) + ' @ ' + oddsVal + 'x | Result: ' + (b.result !== undefined ? b.result : '?') + '</div></div>' +
+                            '<div class="trans-method">Rs ' + b.amount + ' @ ' + b.odds + 'x | Result: ' + (b.result !== undefined ? b.result : '?') + '</div></div>' +
                             '<div style="text-align:right;"><div class="trans-status ' + stCls + '">' + stText + '</div>' +
-                            '<div class="trans-amount" style="color:' + (b.win?'#00E676':(b.processed?'#FF1744':'#888')) + ';">' + displayAmount + '</div></div>';
+                            '<div class="trans-amount" style="color:' + (b.win?'#00E676':'#FF1744') + ';">' + (b.win?'+':'') + (b.win?b.winAmount:0) + '</div></div>';
                         container.appendChild(div);
                     });
                 }
