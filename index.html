@@ -2717,8 +2717,15 @@
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
-                const result = await calculateHouseFavorableResult(resultPeriod);
-                await db.ref('game/results/' + resultPeriod).set(result);
+                // CRITICAL FIX: Check if result already exists to prevent race condition
+                const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
+                let result;
+                if(existingSnap.exists()) {
+                    result = existingSnap.val();
+                } else {
+                    result = await calculateHouseFavorableResult(resultPeriod);
+                    await db.ref('game/results/' + resultPeriod).set(result);
+                }
                 await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
                 // Naya result save hone ke baad purana data auto-delete kar do
@@ -2729,6 +2736,18 @@
         }
 
         async function calculateHouseFavorableResult(period) {
+            // CRITICAL FIX: Check admin forced result FIRST
+            try {
+                const forcedSnap = await db.ref('game/forcedResult').once('value');
+                const forced = forcedSnap.val();
+                if(forced && forced.number !== undefined && forced.number !== null) {
+                    const forcedNum = parseInt(forced.number);
+                    if(!isNaN(forcedNum) && forcedNum >= 0 && forcedNum <= 9) {
+                        const forcedColor = getNumberColor(forcedNum);
+                        return { period, number: forcedNum, color: forcedColor, size: forcedNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                    }
+                }
+            } catch(e) { console.error('Forced result check error:', e); }
             const fallbackNum = Math.floor(Math.random() * 10);
             try {
                 const betsSnap = await db.ref('bets/' + period).once('value');
