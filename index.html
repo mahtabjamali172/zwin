@@ -2475,50 +2475,16 @@
         }
 
         // ===================== Auto Delete - Keep Only Last 10 Periods =====================
+        // SYNC FIX: User app does NOT cleanup bets. Admin panel handles all cleanup.
         async function cleanupOldBets() {
-            try {
-                if (!currentUser) return;
-                // Get periods to keep (last 10 results + current)
-                const resultsSnap = await db.ref('game/results').orderByChild('timestamp').limitToLast(KEEP_LAST_N_RESULTS).once('value');
-                const results = resultsSnap.val() || {};
-                const periodsToKeep = Object.keys(results);
-
-                const currentPdSnap = await db.ref('game/currentPeriod').once('value');
-                const currentPd = currentPdSnap.val();
-                if (currentPd && currentPd.period) periodsToKeep.push(currentPd.period);
-
-                // Delete user bets not in kept periods
-                const snap = await db.ref('userBets/' + currentUser.uid).once('value');
-                const bets = snap.val() || {};
-                let deletedCount = 0;
-                const updates = {};
-                Object.entries(bets).forEach(([betId, bet]) => {
-                    if (bet.period && !periodsToKeep.includes(bet.period)) {
-                        updates[betId] = null;
-                        deletedCount++;
-                    }
-                });
-                if (deletedCount > 0) {
-                    await db.ref('userBets/' + currentUser.uid).update(updates);
-                    console.log('[Auto-Cleanup] Deleted ' + deletedCount + ' old bets. Kept periods: ' + periodsToKeep.join(', '));
-                }
-            } catch(e) { console.error('[Auto-Cleanup] Error:', e); }
+            // No-op: Admin panel handles cleanup.
+            return;
         }
 
-        // ===================== Auto Delete Old Results - Keep Only Last 10 =====================
+        // SYNC FIX: User app does NOT cleanup results. Admin panel handles all cleanup.
         async function cleanupOldResults() {
-            try {
-                const snap = await db.ref('game/results').orderByChild('timestamp').once('value');
-                const results = snap.val() || {};
-                const entries = Object.entries(results);
-                if (entries.length <= KEEP_LAST_N_RESULTS) return;
-                entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-                const toDelete = entries.slice(0, entries.length - KEEP_LAST_N_RESULTS);
-                const updates = {};
-                toDelete.forEach(([period, _]) => { updates['game/results/' + period] = null; });
-                await db.ref().update(updates);
-                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results');
-            } catch(e) { console.error('[Results Cleanup] Error:', e); }
+            // No-op: Admin panel handles cleanup.
+            return;
         }
 
         // ===================== Game Logic =====================
@@ -2548,10 +2514,8 @@
             // CRITICAL FIX: Process any bets that got stuck pending while user was offline
             await processMissedBets();
 
-            // Auto-delete old data - Sirf Current Period + Last 10 History rakho
-            cleanupOldBets();
-            cleanupOldResults();
-            setInterval(() => { cleanupOldBets(); cleanupOldResults(); }, 5 * 60 * 1000);
+            // SYNC FIX: User app does NOT cleanup data. Admin panel handles all cleanup.
+            // User app only reads results from Firebase.
             setInterval(loadUserData, 10000);
             setInterval(loadInvitationProgress, 30000);
         }
@@ -2606,7 +2570,7 @@
                 });
 
                 await checkDailyReset(pd.dateKey);
-                await backfillMissingPeriods(pd.dateKey, currentPeriod);
+                // SYNC FIX: User app never backfills results. Admin panel handles all result generation.
             } catch(e) {
                 console.error('Sync error:', e);
                 stopTimer();
@@ -2614,52 +2578,10 @@
             }
         }
 
+        // SYNC FIX: User app never backfills results. Admin panel handles all result generation.
         async function backfillMissingPeriods(dateKey, currentPeriod) {
-            try {
-                const snap = await db.ref('game/results').orderByKey().limitToLast(1).once('value');
-                const results = snap.val() || {};
-                const entries = Object.entries(results);
-                if(entries.length === 0) return;
-                const lastPeriod = entries[0][0];
-                const lastSeq = parseInt(lastPeriod.slice(-3));
-                const lastDateKey = lastPeriod.slice(0, -3);
-
-                // If date changed, don't backfill - start fresh for new day
-                if(lastDateKey !== dateKey) {
-                    console.log('[Backfill] Date changed, skipping backfill for new day');
-                    return;
-                }
-
-                const currentSeq = parseInt(currentPeriod.slice(-3));
-                const missedCount = currentSeq - lastSeq - 1;
-
-                // CRITICAL FIX: If more than 10 periods missed, skip backfill entirely.
-                // This prevents the "jumping" issue where periods slowly catch up.
-                // We only keep last 10 results anyway, so old gaps don't matter.
-                if(missedCount <= 0) return;
-                if(missedCount > 10) {
-                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping. Only last 10 kept anyway.');
-                    return;
-                }
-
-                // Only backfill the most recent missed periods (up to 10)
-                for(let i = 1; i <= missedCount; i++) {
-                    const missedSeq = lastSeq + i;
-                    const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
-                    const existing = await db.ref('game/results/' + missedPeriod).once('value');
-                    if(existing.exists()) continue;
-                    const num = getDeterministicNumber(missedPeriod);
-                    const color = getNumberColor(num);
-                    await db.ref('game/results/' + missedPeriod).set({
-                        period: missedPeriod,
-                        number: num,
-                        color: color,
-                        size: num >= 5 ? 'Big' : 'Small',
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
-                if(missedCount > 0) console.log('[Backfill] Backfilled', missedCount, 'missing periods');
-            } catch(e) { console.error('Backfill error:', e); }
+            // No-op: User app reads results from Firebase only.
+            return;
         }
 
         function startTimer(seconds) {
@@ -2675,7 +2597,8 @@
                     clearInterval(timerInterval);
                     timerInterval = null;
                     timerSynced = false;
-                    processGameResult();
+                    // SYNC FIX: User app NEVER generates results.
+                    // Result comes from admin via Firebase real-time listener.
                     setTimeout(syncGameState, 1500);
                     return;
                 }
@@ -2719,120 +2642,37 @@
             document.getElementById('tSec2').textContent = s2;
         }
 
-        // ===================== Result Logic =====================
+        // ===================== Result Logic (USER APP - READ ONLY) =====================
+        // SYNC FIX: User app NEVER generates results. It only reads results from Firebase
+        // that were published by the admin panel. This ensures all devices show the same result.
         async function processGameResult() {
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
 
-                // CRITICAL FIX: Use Firebase transaction to ensure ONLY the first client
-                // writes the result. If result already exists, this returns null and we skip.
-                // This prevents the race condition where multiple clients overwrite each other.
-                const result = await calculateHouseFavorableResult(resultPeriod);
-                result.locked = true;
-                result.lockedAt = firebase.database.ServerValue.TIMESTAMP;
+                // Read the result that admin published to Firebase
+                const resultSnap = await db.ref('game/results/' + resultPeriod).once('value');
+                const result = resultSnap.val();
 
-                let didWrite = false;
-                await db.ref('game/results/' + resultPeriod).transaction(current => {
-                    if(current && (current.locked || current.number !== undefined)) {
-                        // Result already exists - DO NOT OVERWRITE
-                        return;
-                    }
-                    didWrite = true;
-                    return result;
-                });
-
-                if(!didWrite) {
-                    console.log('[Result] Period ' + resultPeriod + ' already has a locked result. Skipping.');
-                    // Still process bets in case this client missed it
-                    const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
-                    const existing = existingSnap.val();
-                    if(existing) await processBetsSafely(resultPeriod, existing);
+                if(!result) {
+                    console.log('[Result] No result yet for period ' + resultPeriod + '. Waiting for admin...');
                     return;
                 }
 
-                console.log('[Result] Successfully locked result for period ' + resultPeriod + ':', result);
-                await db.ref('game/lastResult').set(result);
-                await processBetsSafely(resultPeriod, result);
-                // Lock locally too so UI never flickers
+                // Lock locally so UI never flickers
                 lockedResults.set(resultPeriod, result);
-                // Naya result save hone ke baad purana data auto-delete kar do
-                // Sirf last 10 history + current period rakho, baaki sab delete
-                await cleanupOldResults();
-                await cleanupOldBets();
+
+                // Process bets against the existing locked result
+                await processBetsSafely(resultPeriod, result);
             } catch(e) { console.error('Result error:', e); }
         }
 
-        // CRITICAL FIX: Check admin-forced result FIRST before calculating.
-        // If admin set a forced result for this period, use it.
-        // Otherwise use game mode (random or evil) to calculate.
+        // SYNC FIX: calculateHouseFavorableResult is ONLY used by admin panel.
+        // User app reads results from Firebase. Kept as stub for compatibility.
         async function calculateHouseFavorableResult(period) {
-            const fallbackNum = getDeterministicNumber(period);
-            try {
-                // PRIORITY 1: Check if admin set a forced result for this exact period
-                const forcedSnap = await db.ref('game/forcedResult').once('value');
-                const forced = forcedSnap.val();
-                if(forced && forced.period === period && forced.number !== undefined) {
-                    console.log('[Result] Using ADMIN FORCED result: ' + forced.number + ' for period ' + period);
-                    return {
-                        period,
-                        number: forced.number,
-                        color: forced.color || getNumberColor(forced.number),
-                        size: forced.size || (forced.number >= 5 ? 'Big' : 'Small'),
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    };
-                }
-
-                const betsSnap = await db.ref('bets/' + period).once('value');
-                const bets = betsSnap.val();
-                if(!bets) {
-                    const color = getNumberColor(fallbackNum);
-                    return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-                }
-
-                if(currentGameMode === 'random') {
-                    const randomNum = getDeterministicNumber(period);
-                    const color = getNumberColor(randomNum);
-                    return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-                }
-
-                if(currentGameMode === 'evil') {
-                    const payouts = [];
-                    for(let num = 0; num <= 9; num++) {
-                        const color = getNumberColor(num);
-                        const size = num >= 5 ? 'Big' : 'Small';
-                        let totalPayout = 0;
-                        Object.values(bets).forEach(bet => {
-                            if(bet.processed) return;
-                            let win = false; let winAmount = 0;
-                            if(bet.betType === 'color') {
-                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
-                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
-                            } else if(bet.betType === 'number') {
-                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
-                            } else if(bet.betType === 'bs') {
-                                if(bet.selection === 'big' && size === 'Big') { win = true; winAmount = bet.amount * 2; }
-                                else if(bet.selection === 'small' && size === 'Small') { win = true; winAmount = bet.amount * 2; }
-                            }
-                            if(win) totalPayout += winAmount;
-                        });
-                        payouts.push({ number: num, color, size, payout: totalPayout });
-                    }
-                    payouts.sort((a, b) => {
-                        if(a.payout !== b.payout) return a.payout - b.payout;
-                        return Math.random() - 0.5;
-                    });
-                    const best = payouts[0];
-                    return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
-                }
-
-                const color = getNumberColor(fallbackNum);
-                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-            } catch(e) {
-                console.error('House calc error:', e);
-                const color = getNumberColor(fallbackNum);
-                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-            }
+            console.warn('[Result] User app should never calculate results! Reading from Firebase instead.');
+            const snap = await db.ref('game/results/' + period).once('value');
+            return snap.val();
         }
 
         function hashCode(str) {
