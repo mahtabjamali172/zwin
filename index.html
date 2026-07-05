@@ -6,9 +6,9 @@
     <title>Zwin WinGo Game</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -1599,13 +1599,14 @@
     <script>
         // ===================== Firebase Config =====================
         const firebaseConfig = {
-            apiKey: "AIzaSyAqfguS1ucAtklcl06eB1JIWQr46XMpe7g",
-            authDomain: "safe-chat-c0b9c.firebaseapp.com",
-            databaseURL: "https://safe-chat-c0b9c-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "safe-chat-c0b9c",
-            storageBucket: "safe-chat-c0b9c.appspot.com",
-            messagingSenderId: "119640275300",
-            appId: "1:119640275300:web:20ae984f4af1ffe6a62271"
+            apiKey: "AIzaSyDhBH7KW8jOxmAdPdNDZWZBk_4j1WNTV9Q",
+            authDomain: "zwin-fc6b9.firebaseapp.com",
+            databaseURL: "https://zwin-fc6b9-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "zwin-fc6b9",
+            storageBucket: "zwin-fc6b9.firebasestorage.app",
+            messagingSenderId: "191150327",
+            appId: "1:191150327:web:fe26bd85b8c0e424affbf2",
+            measurementId: "G-W95P5BQC66"
         };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -2717,15 +2718,8 @@
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
-                // CRITICAL FIX: Check if result already exists to prevent race condition
-                const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
-                let result;
-                if(existingSnap.exists()) {
-                    result = existingSnap.val();
-                } else {
-                    result = await calculateHouseFavorableResult(resultPeriod);
-                    await db.ref('game/results/' + resultPeriod).set(result);
-                }
+                const result = await calculateHouseFavorableResult(resultPeriod);
+                await db.ref('game/results/' + resultPeriod).set(result);
                 await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
                 // Naya result save hone ke baad purana data auto-delete kar do
@@ -2736,18 +2730,6 @@
         }
 
         async function calculateHouseFavorableResult(period) {
-            // CRITICAL FIX: Check admin forced result FIRST
-            try {
-                const forcedSnap = await db.ref('game/forcedResult').once('value');
-                const forced = forcedSnap.val();
-                if(forced && forced.number !== undefined && forced.number !== null) {
-                    const forcedNum = parseInt(forced.number);
-                    if(!isNaN(forcedNum) && forcedNum >= 0 && forcedNum <= 9) {
-                        const forcedColor = getNumberColor(forcedNum);
-                        return { period, number: forcedNum, color: forcedColor, size: forcedNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
-                    }
-                }
-            } catch(e) { console.error('Forced result check error:', e); }
             const fallbackNum = Math.floor(Math.random() * 10);
             try {
                 const betsSnap = await db.ref('bets/' + period).once('value');
