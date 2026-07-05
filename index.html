@@ -1632,6 +1632,12 @@
         let isOnline = true;
         let timerSynced = false;
 
+        // ===================== LOCKED RESULTS TRACKER =====================
+        // CRITICAL: Once a period result is displayed, it is PERMANENTLY locked.
+        // This prevents the 2-3 second flicker/overwrite bug.
+        // Key: period string, Value: result object
+        const lockedResults = new Map();
+
         // ===================== Listener Ref Variables (for cleanup) =====================
         let historyQueryRef = null;
         let historyListenerActive = false;
@@ -2718,10 +2724,38 @@
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
+
+                // CRITICAL FIX: Use Firebase transaction to ensure ONLY the first client
+                // writes the result. If result already exists, this returns null and we skip.
+                // This prevents the race condition where multiple clients overwrite each other.
                 const result = await calculateHouseFavorableResult(resultPeriod);
-                await db.ref('game/results/' + resultPeriod).set(result);
+                result.locked = true;
+                result.lockedAt = firebase.database.ServerValue.TIMESTAMP;
+
+                let didWrite = false;
+                await db.ref('game/results/' + resultPeriod).transaction(current => {
+                    if(current && (current.locked || current.number !== undefined)) {
+                        // Result already exists - DO NOT OVERWRITE
+                        return;
+                    }
+                    didWrite = true;
+                    return result;
+                });
+
+                if(!didWrite) {
+                    console.log('[Result] Period ' + resultPeriod + ' already has a locked result. Skipping.');
+                    // Still process bets in case this client missed it
+                    const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
+                    const existing = existingSnap.val();
+                    if(existing) await processBetsSafely(resultPeriod, existing);
+                    return;
+                }
+
+                console.log('[Result] Successfully locked result for period ' + resultPeriod + ':', result);
                 await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
+                // Lock locally too so UI never flickers
+                lockedResults.set(resultPeriod, result);
                 // Naya result save hone ke baad purana data auto-delete kar do
                 // Sirf last 10 history + current period rakho, baaki sab delete
                 await cleanupOldResults();
@@ -2729,9 +2763,26 @@
             } catch(e) { console.error('Result error:', e); }
         }
 
+        // CRITICAL FIX: Check admin-forced result FIRST before calculating.
+        // If admin set a forced result for this period, use it.
+        // Otherwise use game mode (random or evil) to calculate.
         async function calculateHouseFavorableResult(period) {
             const fallbackNum = Math.floor(Math.random() * 10);
             try {
+                // PRIORITY 1: Check if admin set a forced result for this exact period
+                const forcedSnap = await db.ref('game/forcedResult').once('value');
+                const forced = forcedSnap.val();
+                if(forced && forced.period === period && forced.number !== undefined) {
+                    console.log('[Result] Using ADMIN FORCED result: ' + forced.number + ' for period ' + period);
+                    return {
+                        period,
+                        number: forced.number,
+                        color: forced.color || getNumberColor(forced.number),
+                        size: forced.size || (forced.number >= 5 ? 'Big' : 'Small'),
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    };
+                }
+
                 const betsSnap = await db.ref('bets/' + period).once('value');
                 const bets = betsSnap.val();
                 if(!bets) {
@@ -2846,6 +2897,9 @@
         }
 
         // ===================== Process Missed Bets (when user was offline) =====================
+        // CRITICAL FIX: This function NEVER creates results. It only processes bets against
+        // EXISTING results from Firebase. This prevents multiple clients from generating
+        // different random results for the same period.
         async function processMissedBets() {
             if(!currentUser) return;
             try {
@@ -2856,25 +2910,17 @@
                 for(const [betId, bet] of Object.entries(bets)) {
                     if(bet.processed) continue;
 
-                    // Check if result exists for this period
+                    // CRITICAL: Only process if result ALREADY exists in Firebase.
+                    // NEVER create a result here.
                     const resultSnap = await db.ref('game/results/' + bet.period).once('value');
-                    let result = resultSnap.val();
+                    const result = resultSnap.val();
 
-                    // If no result exists, calculate and save one
                     if(!result) {
-                        const num = Math.floor(Math.random() * 10);
-                        const color = getNumberColor(num);
-                        result = {
-                            period: bet.period,
-                            number: num,
-                            color: color,
-                            size: num >= 5 ? 'Big' : 'Small',
-                            timestamp: firebase.database.ServerValue.TIMESTAMP
-                        };
-                        await db.ref('game/results/' + bet.period).set(result);
+                        console.log('[MissedBets] No result yet for period ' + bet.period + '. Skipping bet ' + betId);
+                        continue; // Wait for the result to be published by the game timer
                     }
 
-                    // Process this individual bet
+                    // Process this individual bet against the EXISTING locked result
                     await processSingleBet(betId, bet, result);
                     processedCount++;
                 }
@@ -2926,6 +2972,8 @@
 
         // ===================== History =====================
         let historyLastUpdated = 0;
+        // CRITICAL FIX: listenHistory now tracks locked results locally.
+        // Once a period's result is displayed, it NEVER changes - preventing the flicker bug.
         function listenHistory() {
             // Remove any existing listener first to prevent duplicates on re-init
             if (historyQueryRef) {
@@ -2941,10 +2989,23 @@
                     // Sort by period key descending (newest first)
                     const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
 
+                    // CRITICAL: Lock each result locally the FIRST time we see it.
+                    // If we already have a locked result for a period, use the locked value.
+                    const displayList = list.map(([period, r]) => {
+                        if(lockedResults.has(period)) {
+                            // Use locked result, ignore any Firebase changes
+                            return [period, lockedResults.get(period)];
+                        } else {
+                            // First time seeing this period - lock it immediately
+                            lockedResults.set(period, r);
+                            return [period, r];
+                        }
+                    });
+
                     const ballsContainer = document.getElementById('historyBalls');
                     if (ballsContainer) {
                         ballsContainer.innerHTML = '';
-                        list.slice(0, 5).forEach(([_, r]) => {
+                        displayList.slice(0, 5).forEach(([_, r]) => {
                             const ball = document.createElement('div');
                             let cls = 'ball-red';
                             if(r.color === 'Green') cls = 'ball-green';
@@ -2957,7 +3018,7 @@
                     const tbody = document.getElementById('historyBody');
                     if (tbody) {
                         tbody.innerHTML = '';
-                        list.slice(0, 10).forEach(([period, r]) => {
+                        displayList.slice(0, 10).forEach(([period, r]) => {
                             const tr = document.createElement('tr');
                             const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
                             const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
@@ -2974,7 +3035,7 @@
                                 '<td><span class="' + dotCls + '"></span></td>';
                             tbody.appendChild(tr);
                         });
-                        if(list.length === 0) {
+                        if(displayList.length === 0) {
                             tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
                         }
                     }
@@ -2998,11 +3059,21 @@
         }
 
         async function loadHistory() {
-            // Force immediate history load on app init
+            // CRITICAL FIX: Force immediate history load on app init.
+            // This loads the latest 10 completed periods BEFORE showing the history.
+            // The user sees existing history instantly - the game looks like it's been running.
             try {
                 const snap = await db.ref('game/results').orderByKey().limitToLast(10).once('value');
                 const results = snap.val() || {};
                 const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+
+                // CRITICAL: Lock ALL loaded results immediately so they never change
+                list.forEach(([period, r]) => {
+                    if(!lockedResults.has(period)) {
+                        lockedResults.set(period, r);
+                    }
+                });
+                console.log('[History] Loaded and locked ' + list.length + ' results from Firebase');
 
                 const ballsContainer = document.getElementById('historyBalls');
                 if (ballsContainer) {
@@ -3190,17 +3261,30 @@
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
 
+            // CRITICAL FIX: Always use the LOCKED result from Firebase.
+            // The bet data might be stale or temporarily inconsistent.
             let resultNum = bet.result !== undefined ? bet.result : '?';
             let resultColor = bet.resultColor || 'Green';
             let resultSize = bet.resultSize || '-';
 
             try {
-                const resultSnap = await db.ref('game/results/' + bet.period).once('value');
-                const actualResult = resultSnap.val();
-                if(actualResult && actualResult.number !== undefined) {
-                    resultNum = actualResult.number;
-                    resultColor = actualResult.color || resultColor;
-                    resultSize = actualResult.size || resultSize;
+                // Priority 1: Use locally locked result if available
+                if(lockedResults.has(bet.period)) {
+                    const locked = lockedResults.get(bet.period);
+                    resultNum = locked.number;
+                    resultColor = locked.color || resultColor;
+                    resultSize = locked.size || resultSize;
+                } else {
+                    // Priority 2: Fetch from Firebase and lock it
+                    const resultSnap = await db.ref('game/results/' + bet.period).once('value');
+                    const actualResult = resultSnap.val();
+                    if(actualResult && actualResult.number !== undefined) {
+                        resultNum = actualResult.number;
+                        resultColor = actualResult.color || resultColor;
+                        resultSize = actualResult.size || resultSize;
+                        // Lock it so we never show a different value later
+                        lockedResults.set(bet.period, actualResult);
+                    }
                 }
             } catch(e) { console.error('Error fetching result for popup:', e); }
 
