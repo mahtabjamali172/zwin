@@ -2648,7 +2648,7 @@
                     const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
                     const existing = await db.ref('game/results/' + missedPeriod).once('value');
                     if(existing.exists()) continue;
-                    const num = Math.floor(Math.random() * 10);
+                    const num = getDeterministicNumber(missedPeriod);
                     const color = getNumberColor(num);
                     await db.ref('game/results/' + missedPeriod).set({
                         period: missedPeriod,
@@ -2767,7 +2767,7 @@
         // If admin set a forced result for this period, use it.
         // Otherwise use game mode (random or evil) to calculate.
         async function calculateHouseFavorableResult(period) {
-            const fallbackNum = Math.floor(Math.random() * 10);
+            const fallbackNum = getDeterministicNumber(period);
             try {
                 // PRIORITY 1: Check if admin set a forced result for this exact period
                 const forcedSnap = await db.ref('game/forcedResult').once('value');
@@ -2791,7 +2791,7 @@
                 }
 
                 if(currentGameMode === 'random') {
-                    const randomNum = Math.floor(Math.random() * 10);
+                    const randomNum = getDeterministicNumber(period);
                     const color = getNumberColor(randomNum);
                     return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
@@ -2843,6 +2843,15 @@
                 hash |= 0;
             }
             return hash;
+        }
+
+        // CRITICAL FIX: Deterministic result generator.
+        // ALL devices produce the EXACT same number for the same period.
+        // This eliminates race conditions - even if multiple clients race to write,
+        // they all compute the same result, ensuring perfect cross-device synchronization.
+        function getDeterministicNumber(period) {
+            const hash = hashCode(period);
+            return Math.abs(hash) % 10;
         }
 
         function getNumberColor(num) {
