@@ -1641,6 +1641,8 @@
         // ===================== Listener Ref Variables (for cleanup) =====================
         let historyQueryRef = null;
         let historyListenerActive = false;
+        let historyHeartbeat = null;
+        let historyHeartbeatRunning = false;
         let betResultsQueryRef = null;
         let announcementRef = null;
         let gameModeRef = null;
@@ -1694,6 +1696,13 @@
                     minWithdrawRef = null;
                 }
 
+                // Stop history heartbeat
+                if (historyHeartbeat) {
+                    clearInterval(historyHeartbeat);
+                    historyHeartbeat = null;
+                }
+                historyHeartbeatRunning = false;
+
                 console.log('[Cleanup] All Firebase listeners removed successfully');
             } catch(e) {
                 console.error('[Cleanup] Error removing listeners:', e);
@@ -1740,6 +1749,15 @@
                     if (!timerSynced) {
                         syncGameState();
                     }
+                    // CRITICAL FIX: Resync history on reconnection to ensure no missed results
+                    setTimeout(() => {
+                        loadHistory();
+                        // Restart listener if it died while offline
+                        if (!historyListenerActive) {
+                            console.log('[Reconnect] History listener was inactive, restarting...');
+                            listenHistory();
+                        }
+                    }, 1000);
                 }
             });
         }
@@ -2475,16 +2493,50 @@
         }
 
         // ===================== Auto Delete - Keep Only Last 10 Periods =====================
-        // SYNC FIX: User app does NOT cleanup bets. Admin panel handles all cleanup.
         async function cleanupOldBets() {
-            // No-op: Admin panel handles cleanup.
-            return;
+            try {
+                if (!currentUser) return;
+                // Get periods to keep (last 10 results + current)
+                const resultsSnap = await db.ref('game/results').orderByChild('timestamp').limitToLast(KEEP_LAST_N_RESULTS).once('value');
+                const results = resultsSnap.val() || {};
+                const periodsToKeep = Object.keys(results);
+
+                const currentPdSnap = await db.ref('game/currentPeriod').once('value');
+                const currentPd = currentPdSnap.val();
+                if (currentPd && currentPd.period) periodsToKeep.push(currentPd.period);
+
+                // Delete user bets not in kept periods
+                const snap = await db.ref('userBets/' + currentUser.uid).once('value');
+                const bets = snap.val() || {};
+                let deletedCount = 0;
+                const updates = {};
+                Object.entries(bets).forEach(([betId, bet]) => {
+                    if (bet.period && !periodsToKeep.includes(bet.period)) {
+                        updates[betId] = null;
+                        deletedCount++;
+                    }
+                });
+                if (deletedCount > 0) {
+                    await db.ref('userBets/' + currentUser.uid).update(updates);
+                    console.log('[Auto-Cleanup] Deleted ' + deletedCount + ' old bets. Kept periods: ' + periodsToKeep.join(', '));
+                }
+            } catch(e) { console.error('[Auto-Cleanup] Error:', e); }
         }
 
-        // SYNC FIX: User app does NOT cleanup results. Admin panel handles all cleanup.
+        // ===================== Auto Delete Old Results - Keep Only Last 10 =====================
         async function cleanupOldResults() {
-            // No-op: Admin panel handles cleanup.
-            return;
+            try {
+                const snap = await db.ref('game/results').orderByChild('timestamp').once('value');
+                const results = snap.val() || {};
+                const entries = Object.entries(results);
+                if (entries.length <= KEEP_LAST_N_RESULTS) return;
+                entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+                const toDelete = entries.slice(0, entries.length - KEEP_LAST_N_RESULTS);
+                const updates = {};
+                toDelete.forEach(([period, _]) => { updates['game/results/' + period] = null; });
+                await db.ref().update(updates);
+                console.log('[Auto-Cleanup] Deleted ' + toDelete.length + ' old results');
+            } catch(e) { console.error('[Results Cleanup] Error:', e); }
         }
 
         // ===================== Game Logic =====================
@@ -2502,6 +2554,7 @@
             // Load history IMMEDIATELY before anything else (so user sees latest 10 instantly)
             await loadHistory();
             listenHistory();
+            startHistoryHeartbeat(); // CRITICAL FIX: Keep history alive with health checks
             listenForBetResults();
             listenAnnouncement();
             listenGameMode();
@@ -2514,8 +2567,10 @@
             // CRITICAL FIX: Process any bets that got stuck pending while user was offline
             await processMissedBets();
 
-            // SYNC FIX: User app does NOT cleanup data. Admin panel handles all cleanup.
-            // User app only reads results from Firebase.
+            // Auto-delete old data - Sirf Current Period + Last 10 History rakho
+            cleanupOldBets();
+            cleanupOldResults();
+            setInterval(() => { cleanupOldBets(); cleanupOldResults(); }, 5 * 60 * 1000);
             setInterval(loadUserData, 10000);
             setInterval(loadInvitationProgress, 30000);
         }
@@ -2570,7 +2625,7 @@
                 });
 
                 await checkDailyReset(pd.dateKey);
-                // SYNC FIX: User app never backfills results. Admin panel handles all result generation.
+                await backfillMissingPeriods(pd.dateKey, currentPeriod);
             } catch(e) {
                 console.error('Sync error:', e);
                 stopTimer();
@@ -2578,10 +2633,52 @@
             }
         }
 
-        // SYNC FIX: User app never backfills results. Admin panel handles all result generation.
         async function backfillMissingPeriods(dateKey, currentPeriod) {
-            // No-op: User app reads results from Firebase only.
-            return;
+            try {
+                const snap = await db.ref('game/results').orderByKey().limitToLast(1).once('value');
+                const results = snap.val() || {};
+                const entries = Object.entries(results);
+                if(entries.length === 0) return;
+                const lastPeriod = entries[0][0];
+                const lastSeq = parseInt(lastPeriod.slice(-3));
+                const lastDateKey = lastPeriod.slice(0, -3);
+
+                // If date changed, don't backfill - start fresh for new day
+                if(lastDateKey !== dateKey) {
+                    console.log('[Backfill] Date changed, skipping backfill for new day');
+                    return;
+                }
+
+                const currentSeq = parseInt(currentPeriod.slice(-3));
+                const missedCount = currentSeq - lastSeq - 1;
+
+                // CRITICAL FIX: If more than 10 periods missed, skip backfill entirely.
+                // This prevents the "jumping" issue where periods slowly catch up.
+                // We only keep last 10 results anyway, so old gaps don't matter.
+                if(missedCount <= 0) return;
+                if(missedCount > 10) {
+                    console.log('[Backfill] Too many missed periods (' + missedCount + '), skipping. Only last 10 kept anyway.');
+                    return;
+                }
+
+                // Only backfill the most recent missed periods (up to 10)
+                for(let i = 1; i <= missedCount; i++) {
+                    const missedSeq = lastSeq + i;
+                    const missedPeriod = dateKey + String(missedSeq).padStart(3, '0');
+                    const existing = await db.ref('game/results/' + missedPeriod).once('value');
+                    if(existing.exists()) continue;
+                    const num = getDeterministicNumber(missedPeriod);
+                    const color = getNumberColor(num);
+                    await db.ref('game/results/' + missedPeriod).set({
+                        period: missedPeriod,
+                        number: num,
+                        color: color,
+                        size: num >= 5 ? 'Big' : 'Small',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+                if(missedCount > 0) console.log('[Backfill] Backfilled', missedCount, 'missing periods');
+            } catch(e) { console.error('Backfill error:', e); }
         }
 
         function startTimer(seconds) {
@@ -2597,8 +2694,7 @@
                     clearInterval(timerInterval);
                     timerInterval = null;
                     timerSynced = false;
-                    // SYNC FIX: User app NEVER generates results.
-                    // Result comes from admin via Firebase real-time listener.
+                    processGameResult();
                     setTimeout(syncGameState, 1500);
                     return;
                 }
@@ -2642,37 +2738,120 @@
             document.getElementById('tSec2').textContent = s2;
         }
 
-        // ===================== Result Logic (USER APP - READ ONLY) =====================
-        // SYNC FIX: User app NEVER generates results. It only reads results from Firebase
-        // that were published by the admin panel. This ensures all devices show the same result.
+        // ===================== Result Logic =====================
         async function processGameResult() {
             try {
                 const resultPeriod = currentPeriod;
                 if(!resultPeriod) return;
 
-                // Read the result that admin published to Firebase
-                const resultSnap = await db.ref('game/results/' + resultPeriod).once('value');
-                const result = resultSnap.val();
+                // CRITICAL FIX: Use Firebase transaction to ensure ONLY the first client
+                // writes the result. If result already exists, this returns null and we skip.
+                // This prevents the race condition where multiple clients overwrite each other.
+                const result = await calculateHouseFavorableResult(resultPeriod);
+                result.locked = true;
+                result.lockedAt = firebase.database.ServerValue.TIMESTAMP;
 
-                if(!result) {
-                    console.log('[Result] No result yet for period ' + resultPeriod + '. Waiting for admin...');
+                let didWrite = false;
+                await db.ref('game/results/' + resultPeriod).transaction(current => {
+                    if(current && (current.locked || current.number !== undefined)) {
+                        // Result already exists - DO NOT OVERWRITE
+                        return;
+                    }
+                    didWrite = true;
+                    return result;
+                });
+
+                if(!didWrite) {
+                    console.log('[Result] Period ' + resultPeriod + ' already has a locked result. Skipping.');
+                    // Still process bets in case this client missed it
+                    const existingSnap = await db.ref('game/results/' + resultPeriod).once('value');
+                    const existing = existingSnap.val();
+                    if(existing) await processBetsSafely(resultPeriod, existing);
                     return;
                 }
 
-                // Lock locally so UI never flickers
-                lockedResults.set(resultPeriod, result);
-
-                // Process bets against the existing locked result
+                console.log('[Result] Successfully locked result for period ' + resultPeriod + ':', result);
+                await db.ref('game/lastResult').set(result);
                 await processBetsSafely(resultPeriod, result);
+                // Lock locally too so UI never flickers
+                lockedResults.set(resultPeriod, result);
+                // Naya result save hone ke baad purana data auto-delete kar do
+                // Sirf last 10 history + current period rakho, baaki sab delete
+                await cleanupOldResults();
+                await cleanupOldBets();
             } catch(e) { console.error('Result error:', e); }
         }
 
-        // SYNC FIX: calculateHouseFavorableResult is ONLY used by admin panel.
-        // User app reads results from Firebase. Kept as stub for compatibility.
+        // CRITICAL FIX: Check admin-forced result FIRST before calculating.
+        // If admin set a forced result for this period, use it.
+        // Otherwise use game mode (random or evil) to calculate.
         async function calculateHouseFavorableResult(period) {
-            console.warn('[Result] User app should never calculate results! Reading from Firebase instead.');
-            const snap = await db.ref('game/results/' + period).once('value');
-            return snap.val();
+            const fallbackNum = getDeterministicNumber(period);
+            try {
+                // PRIORITY 1: Check if admin set a forced result for this exact period
+                const forcedSnap = await db.ref('game/forcedResult').once('value');
+                const forced = forcedSnap.val();
+                if(forced && forced.period === period && forced.number !== undefined) {
+                    console.log('[Result] Using ADMIN FORCED result: ' + forced.number + ' for period ' + period);
+                    return {
+                        period,
+                        number: forced.number,
+                        color: forced.color || getNumberColor(forced.number),
+                        size: forced.size || (forced.number >= 5 ? 'Big' : 'Small'),
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    };
+                }
+
+                const betsSnap = await db.ref('bets/' + period).once('value');
+                const bets = betsSnap.val();
+                if(!bets) {
+                    const color = getNumberColor(fallbackNum);
+                    return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'random') {
+                    const randomNum = getDeterministicNumber(period);
+                    const color = getNumberColor(randomNum);
+                    return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'evil') {
+                    const payouts = [];
+                    for(let num = 0; num <= 9; num++) {
+                        const color = getNumberColor(num);
+                        const size = num >= 5 ? 'Big' : 'Small';
+                        let totalPayout = 0;
+                        Object.values(bets).forEach(bet => {
+                            if(bet.processed) return;
+                            let win = false; let winAmount = 0;
+                            if(bet.betType === 'color') {
+                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
+                            } else if(bet.betType === 'number') {
+                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
+                            } else if(bet.betType === 'bs') {
+                                if(bet.selection === 'big' && size === 'Big') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'small' && size === 'Small') { win = true; winAmount = bet.amount * 2; }
+                            }
+                            if(win) totalPayout += winAmount;
+                        });
+                        payouts.push({ number: num, color, size, payout: totalPayout });
+                    }
+                    payouts.sort((a, b) => {
+                        if(a.payout !== b.payout) return a.payout - b.payout;
+                        return Math.random() - 0.5;
+                    });
+                    const best = payouts[0];
+                    return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                const color = getNumberColor(fallbackNum);
+                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+            } catch(e) {
+                console.error('House calc error:', e);
+                const color = getNumberColor(fallbackNum);
+                return { period, number: fallbackNum, color, size: fallbackNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+            }
         }
 
         function hashCode(str) {
@@ -2827,11 +3006,14 @@
             // Remove any existing listener first to prevent duplicates on re-init
             if (historyQueryRef) {
                 historyQueryRef.off('value');
+                historyQueryRef.off('child_added');
                 historyQueryRef = null;
             }
             // Use orderByKey + limitToLast for reliable latest-10 results
             // Period keys are chronologically ordered (e.g. 20260525001, 20260525002)
             historyQueryRef = db.ref('game/results').orderByKey().limitToLast(10);
+
+            // Primary listener: 'value' gets all results at once
             historyQueryRef.on('value', snap => {
                 try {
                     const results = snap.val() || {};
@@ -2851,42 +3033,14 @@
                         }
                     });
 
-                    const ballsContainer = document.getElementById('historyBalls');
-                    if (ballsContainer) {
-                        ballsContainer.innerHTML = '';
-                        displayList.slice(0, 5).forEach(([_, r]) => {
-                            const ball = document.createElement('div');
-                            let cls = 'ball-red';
-                            if(r.color === 'Green') cls = 'ball-green';
-                            ball.className = 'h-ball ' + cls;
-                            ball.textContent = r.number;
-                            ballsContainer.appendChild(ball);
-                        });
-                    }
+                    updateHistoryUI(displayList);
 
-                    const tbody = document.getElementById('historyBody');
-                    if (tbody) {
-                        tbody.innerHTML = '';
-                        displayList.slice(0, 10).forEach(([period, r]) => {
-                            const tr = document.createElement('tr');
-                            const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
-                            const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
-                            // Color dot class
-                            let dotCls = 'hist-color-dot red';
-                            if(r.color === 'Green') dotCls = 'hist-color-dot green';
-                            // Colored ball for number
-                            let ballCls = 'hist-ball';
-                            if(numCls.includes('green')) ballCls += ' hist-green';
-                            else ballCls += ' hist-red';
-                            tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
-                                '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
-                                '<td class="' + bsCls + '">' + r.size + '</td>' +
-                                '<td><span class="' + dotCls + '"></span></td>';
-                            tbody.appendChild(tr);
-                        });
-                        if(displayList.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
-                        }
+                    // Trim lockedResults to prevent unbounded growth
+                    if (lockedResults.size > 15) {
+                        const entries = [...lockedResults.entries()];
+                        entries.sort((a, b) => b[0].localeCompare(a[0]));
+                        lockedResults.clear();
+                        entries.slice(0, 10).forEach(([k, v]) => lockedResults.set(k, v));
                     }
 
                     historyLastUpdated = Date.now();
@@ -2897,6 +3051,68 @@
                 console.error('History listener error:', err);
                 historyListenerActive = false;
             });
+
+            // BACKUP listener: 'child_added' catches individual new results that 'value' might miss
+            historyQueryRef.on('child_added', snap => {
+                try {
+                    const period = snap.key;
+                    const r = snap.val();
+                    if (!period || !r) return;
+                    // Only process if we haven't seen this period yet
+                    if (!lockedResults.has(period)) {
+                        lockedResults.set(period, r);
+                        // Force a full reload to ensure correct ordering
+                        loadHistory();
+                        historyLastUpdated = Date.now();
+                        updateLiveIndicator(true);
+                        historyListenerActive = true;
+                    }
+                } catch(e) { console.error('History child_added error:', e); }
+            }, err => {
+                console.error('History child_added listener error:', err);
+            });
+        }
+
+        // CRITICAL FIX: Centralized history UI update to ensure consistency
+        // and prevent duplicate entries.
+        function updateHistoryUI(displayList) {
+            const ballsContainer = document.getElementById('historyBalls');
+            if (ballsContainer) {
+                ballsContainer.innerHTML = '';
+                displayList.slice(0, 5).forEach(([_, r]) => {
+                    const ball = document.createElement('div');
+                    let cls = 'ball-red';
+                    if(r.color === 'Green') cls = 'ball-green';
+                    ball.className = 'h-ball ' + cls;
+                    ball.textContent = r.number;
+                    ballsContainer.appendChild(ball);
+                });
+            }
+
+            const tbody = document.getElementById('historyBody');
+            if (tbody) {
+                tbody.innerHTML = '';
+                displayList.slice(0, 10).forEach(([period, r]) => {
+                    const tr = document.createElement('tr');
+                    const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
+                    const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
+                    // Color dot class
+                    let dotCls = 'hist-color-dot red';
+                    if(r.color === 'Green') dotCls = 'hist-color-dot green';
+                    // Colored ball for number
+                    let ballCls = 'hist-ball';
+                    if(numCls.includes('green')) ballCls += ' hist-green';
+                    else ballCls += ' hist-red';
+                    tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
+                        '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
+                        '<td class="' + bsCls + '">' + r.size + '</td>' +
+                        '<td><span class="' + dotCls + '"></span></td>';
+                    tbody.appendChild(tr);
+                });
+                if(displayList.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
+                }
+            }
         }
 
         function updateLiveIndicator(active) {
@@ -2905,6 +3121,44 @@
                 indicator.style.background = active ? '#00E676' : '#FF1744';
                 indicator.style.boxShadow = active ? '0 0 8px #00E676' : 'none';
             }
+        }
+
+        // ===================== History Heartbeat =====================
+        // CRITICAL FIX: Periodically checks if the history listener is still alive.
+        // If the listener dies silently (common after long runtime), this restarts it.
+        // Also proactively fetches missed results if no update was received recently.
+        function startHistoryHeartbeat() {
+            if (historyHeartbeatRunning) return; // Already running
+            historyHeartbeatRunning = true;
+
+            historyHeartbeat = setInterval(() => {
+                try {
+                    const timeSinceLastUpdate = Date.now() - historyLastUpdated;
+
+                    // If no update in 60 seconds, force a reload
+                    if (historyLastUpdated > 0 && timeSinceLastUpdate > 60000) {
+                        console.log('[History Heartbeat] No updates for ' + Math.round(timeSinceLastUpdate/1000) + 's, forcing resync...');
+                        loadHistory();
+                    }
+
+                    // If listener is not active, restart it
+                    if (!historyListenerActive) {
+                        console.log('[History Heartbeat] Listener inactive, restarting...');
+                        listenHistory();
+                    }
+
+                    // Trim lockedResults to latest 10 to prevent memory growth
+                    if (lockedResults.size > 15) {
+                        const entries = [...lockedResults.entries()];
+                        entries.sort((a, b) => b[0].localeCompare(a[0]));
+                        lockedResults.clear();
+                        entries.slice(0, 10).forEach(([k, v]) => lockedResults.set(k, v));
+                        console.log('[History Heartbeat] Trimmed lockedResults to 10 entries');
+                    }
+                } catch(e) {
+                    console.error('[History Heartbeat] Error:', e);
+                }
+            }, 10000); // Check every 10 seconds
         }
 
         async function loadHistory() {
@@ -2922,44 +3176,18 @@
                         lockedResults.set(period, r);
                     }
                 });
+
+                // Trim lockedResults to prevent unbounded growth
+                if (lockedResults.size > 15) {
+                    const entries = [...lockedResults.entries()];
+                    entries.sort((a, b) => b[0].localeCompare(a[0]));
+                    lockedResults.clear();
+                    entries.slice(0, 10).forEach(([k, v]) => lockedResults.set(k, v));
+                }
+
                 console.log('[History] Loaded and locked ' + list.length + ' results from Firebase');
-
-                const ballsContainer = document.getElementById('historyBalls');
-                if (ballsContainer) {
-                    ballsContainer.innerHTML = '';
-                    list.slice(0, 5).forEach(([_, r]) => {
-                        const ball = document.createElement('div');
-                        let cls = 'ball-red';
-                        if(r.color === 'Green') cls = 'ball-green';
-                        ball.className = 'h-ball ' + cls;
-                        ball.textContent = r.number;
-                        ballsContainer.appendChild(ball);
-                    });
-                }
-
-                const tbody = document.getElementById('historyBody');
-                if (tbody) {
-                    tbody.innerHTML = '';
-                    list.slice(0, 10).forEach(([period, r]) => {
-                        const tr = document.createElement('tr');
-                        const numCls = r.color === 'Green' ? 'hist-num green' : 'hist-num red';
-                        const bsCls = r.size === 'Big' ? 'hist-bs big' : 'hist-bs small';
-                        let dotCls = 'hist-color-dot red';
-                        if(r.color === 'Green') dotCls = 'hist-color-dot green';
-                        // Colored ball for number
-                        let ballCls = 'hist-ball';
-                        if(numCls.includes('green')) ballCls += ' hist-green';
-                        else ballCls += ' hist-red';
-                        tr.innerHTML = '<td class="period-cell">' + period + '</td>' +
-                            '<td><span class="' + ballCls + '">' + r.number + '</span></td>' +
-                            '<td class="' + bsCls + '">' + r.size + '</td>' +
-                            '<td><span class="' + dotCls + '"></span></td>';
-                        tbody.appendChild(tr);
-                    });
-                    if(list.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="4" style="color:#888;text-align:center;">No results yet</td></tr>';
-                    }
-                }
+                updateHistoryUI(list);
+                historyLastUpdated = Date.now();
             } catch(e) { console.error('Force history load error:', e); }
         }
 
