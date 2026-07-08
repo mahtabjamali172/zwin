@@ -2820,9 +2820,45 @@
                 }
 
                 if(currentGameMode === 'random') {
-                    const randomNum = getDeterministicNumber(period);
-                    const color = getNumberColor(randomNum);
-                    return { period, number: randomNum, color, size: randomNum >= 5 ? 'Big' : 'Small', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                    // Calculate payouts for all numbers to pick a house-favorable result
+                    const payouts = [];
+                    for(let num = 0; num <= 9; num++) {
+                        const color = getNumberColor(num);
+                        const size = num >= 5 ? 'Big' : 'Small';
+                        let totalPayout = 0;
+                        Object.values(bets).forEach(bet => {
+                            if(bet.processed) return;
+                            let win = false; let winAmount = 0;
+                            if(bet.betType === 'color') {
+                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
+                            } else if(bet.betType === 'number') {
+                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
+                            } else if(bet.betType === 'bs') {
+                                if(bet.selection === 'big' && size === 'Big') { win = true; winAmount = bet.amount * 2; }
+                                else if(bet.selection === 'small' && size === 'Small') { win = true; winAmount = bet.amount * 2; }
+                            }
+                            if(win) totalPayout += winAmount;
+                        });
+                        payouts.push({ number: num, color, size, payout: totalPayout });
+                    }
+                    payouts.sort((a, b) => {
+                        if(a.payout !== b.payout) return a.payout - b.payout;
+                        return hashCode(period + '_tie_' + a.number) - hashCode(period + '_tie_' + b.number);
+                    });
+                    // 80% chance: pick the most house-favorable number (lowest payout)
+                    // 20% chance: pick deterministically from all numbers
+                    // This produces approximately 10% overall player win rate
+                    const seed = Math.abs(hashCode(period + '_randommode'));
+                    const roll = seed % 100;
+                    let selected;
+                    if(roll < 80) {
+                        selected = payouts[0];
+                    } else {
+                        const idx = seed % payouts.length;
+                        selected = payouts[idx];
+                    }
+                    return { period, number: selected.number, color: selected.color, size: selected.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
 
                 if(currentGameMode === 'evil') {
@@ -2849,7 +2885,10 @@
                     }
                     payouts.sort((a, b) => {
                         if(a.payout !== b.payout) return a.payout - b.payout;
-                        return Math.random() - 0.5;
+                        // DETERMINISTIC TIEBREAKER: All devices must produce the same result.
+                        // Uses enhanced hash with salted period + number for unpredictable ordering.
+                        // Never use Math.random() here - it causes different results per device.
+                        return hashCode(period + '_tie_' + a.number) - hashCode(period + '_tie_' + b.number);
                     });
                     const best = payouts[0];
                     return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
@@ -2868,19 +2907,60 @@
             let hash = 0;
             for(let i = 0; i < str.length; i++) {
                 const char = str.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
+                hash = ((hash << 5) - hash) + char + i * 47;
                 hash |= 0;
             }
+            // Avalanche mixing - ensures every input bit affects every output bit
+            hash ^= hash >>> 16;
+            hash = ((hash * 0x85ebca6b) | 0);
+            hash ^= hash >>> 13;
+            hash = ((hash * 0xc2b2ae35) | 0);
+            hash ^= hash >>> 16;
             return hash;
         }
 
-        // CRITICAL FIX: Deterministic result generator.
+        // CRITICAL FIX: Advanced deterministic result generator.
         // ALL devices produce the EXACT same number for the same period.
-        // This eliminates race conditions - even if multiple clients race to write,
-        // they all compute the same result, ensuring perfect cross-device synchronization.
+        // Uses 4 independent hash layers + non-linear mixing for high-variance,
+        // unpredictable, natural-looking trends with no repeating cycles.
+        // Eliminates race conditions - all devices compute the same result.
         function getDeterministicNumber(period) {
-            const hash = hashCode(period);
-            return Math.abs(hash) % 10;
+            const p = period.toString();
+
+            // Layer 1: Enhanced hash with avalanche mixing
+            let h1 = hashCode(p);
+
+            // Layer 2: Reversed string hash - completely independent stream
+            let h2 = hashCode(p.split('').reverse().join('') + '_xr2');
+
+            // Layer 3: FNV-1a style hash with additional bit rotation
+            let h3 = 0x811c9dc5;
+            for(let i = 0; i < p.length; i++) {
+                h3 ^= p.charCodeAt(i);
+                h3 = ((h3 * 0x01000193) | 0);
+                h3 = ((h3 << 11) | (h3 >>> 21)); // rotate left by 11
+            }
+
+            // Layer 4: Period-based LCG with non-linear combination
+            const pn = parseInt(p) || 0;
+            const lcg1 = ((pn * 1103515245 + 12345) & 0x7fffffff);
+            const lcg2 = ((pn * 134775813 + 1) & 0x7fffffff);
+            const h4 = (lcg1 ^ (lcg2 >>> 16)) | 0;
+
+            // Combine all layers with Boost::hash_combine style non-linear mixing
+            let seed = h1;
+            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h4 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+
+            // Final whitening for uniform distribution across 0-9
+            seed ^= seed >>> 16;
+            seed = ((seed * 0x7feb352d) | 0);
+            seed ^= seed >>> 15;
+            seed = ((seed * 0x846ca68b) | 0);
+            seed ^= seed >>> 16;
+
+            return Math.abs(seed) % 10;
         }
 
         function getNumberColor(num) {
