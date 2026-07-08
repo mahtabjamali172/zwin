@@ -2820,45 +2820,16 @@
                 }
 
                 if(currentGameMode === 'random') {
-                    // Calculate payouts for all numbers to pick a house-favorable result
-                    const payouts = [];
-                    for(let num = 0; num <= 9; num++) {
-                        const color = getNumberColor(num);
-                        const size = num >= 5 ? 'Big' : 'Small';
-                        let totalPayout = 0;
-                        Object.values(bets).forEach(bet => {
-                            if(bet.processed) return;
-                            let win = false; let winAmount = 0;
-                            if(bet.betType === 'color') {
-                                if(bet.selection === 'green' && color === 'Green') { win = true; winAmount = bet.amount * 2; }
-                                else if(bet.selection === 'red' && color === 'Red') { win = true; winAmount = bet.amount * 2; }
-                            } else if(bet.betType === 'number') {
-                                if(parseInt(bet.selection) === num) { win = true; winAmount = bet.amount * 9; }
-                            } else if(bet.betType === 'bs') {
-                                if(bet.selection === 'big' && size === 'Big') { win = true; winAmount = bet.amount * 2; }
-                                else if(bet.selection === 'small' && size === 'Small') { win = true; winAmount = bet.amount * 2; }
-                            }
-                            if(win) totalPayout += winAmount;
-                        });
-                        payouts.push({ number: num, color, size, payout: totalPayout });
-                    }
-                    payouts.sort((a, b) => {
-                        if(a.payout !== b.payout) return a.payout - b.payout;
-                        return hashCode(period + '_tie_' + a.number) - hashCode(period + '_tie_' + b.number);
-                    });
-                    // 35% chance: pick the most house-favorable number (lowest payout)
-                    // 65% chance: pick deterministically from all numbers
-                    // This produces approximately 20-25% overall player win rate
+                    // Random Mode: Each number 0-9 has an equal 10% chance.
+                    // The house edge comes naturally from the game math:
+                    // - Color/BS bets: 50% win rate, 2x payout (break-even)
+                    // - Number bets: 10% win rate, 9x payout (10% house edge)
+                    // Deterministic hash ensures all devices produce the same result.
                     const seed = Math.abs(hashCode(period + '_randommode'));
-                    const roll = seed % 100;
-                    let selected;
-                    if(roll < 35) {
-                        selected = payouts[0];
-                    } else {
-                        const idx = seed % payouts.length;
-                        selected = payouts[idx];
-                    }
-                    return { period, number: selected.number, color: selected.color, size: selected.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
+                    const selectedNum = seed % 10;
+                    const selectedColor = getNumberColor(selectedNum);
+                    const selectedSize = selectedNum >= 5 ? 'Big' : 'Small';
+                    return { period, number: selectedNum, color: selectedColor, size: selectedSize, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
 
                 if(currentGameMode === 'evil') {
