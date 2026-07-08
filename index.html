@@ -2846,13 +2846,13 @@
                         if(a.payout !== b.payout) return a.payout - b.payout;
                         return hashCode(period + '_tie_' + a.number) - hashCode(period + '_tie_' + b.number);
                     });
-                    // 80% chance: pick the most house-favorable number (lowest payout)
-                    // 20% chance: pick deterministically from all numbers
-                    // This produces approximately 10% overall player win rate
+                    // 35% chance: pick the most house-favorable number (lowest payout)
+                    // 65% chance: pick deterministically from all numbers
+                    // This produces approximately 20-25% overall player win rate
                     const seed = Math.abs(hashCode(period + '_randommode'));
                     const roll = seed % 100;
                     let selected;
-                    if(roll < 80) {
+                    if(roll < 35) {
                         selected = payouts[0];
                     } else {
                         const idx = seed % payouts.length;
