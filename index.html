@@ -449,19 +449,18 @@
         .ticket-item .t-meta { display:flex; justify-content:space-between; font-size:10px; color:#666; }
         .ticket-item .t-reply { background:rgba(0,230,118,0.08); padding:6px; border-radius:6px; margin-top:6px; font-size:11px; color:#00E676; border:1px solid rgba(0,230,118,0.15); }
 
-        /* ===== VIP RESULT POPUP ===== */
+        /* ===== VIP RESULT POPUP - RIBBON STYLE ===== */
         .vip-result-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.25);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(0,0,0,0.75);
             z-index: 300;
             display: none;
             align-items: center;
             justify-content: center;
             opacity: 0;
             transition: opacity 0.4s ease;
+            padding: 20px;
         }
         .vip-result-overlay.active {
             display: flex;
@@ -476,257 +475,250 @@
             z-index: 0;
         }
 
-        /* Glassmorphism popup card base */
+        /* ===== POPUP CARD BASE ===== */
         .vip-popup-card {
-            background: linear-gradient(165deg, rgba(20,18,30,0.96) 0%, rgba(10,10,15,0.98) 100%);
-            backdrop-filter: blur(40px) saturate(1.3);
-            -webkit-backdrop-filter: blur(40px) saturate(1.3);
-            border-radius: 24px;
             position: relative;
-            overflow: hidden;
             width: 90%;
-            max-width: 360px;
+            max-width: 340px;
+            border-radius: 20px;
             z-index: 1;
+            overflow: visible;
             will-change: transform, opacity;
         }
 
-        /* Animated gradient border - win */
+        /* Win card - dark green gradient */
+        .vip-popup-card.win-card {
+            background: linear-gradient(180deg, #0d2b15 0%, #0a1f0f 50%, #061a0a 100%);
+            border: 2px solid rgba(0,230,118,0.5);
+            box-shadow: 0 0 30px rgba(0,230,118,0.25), 0 0 60px rgba(0,200,83,0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        /* Loss card - dark red gradient */
+        .vip-popup-card.loss-card {
+            background: linear-gradient(180deg, #2b0d15 0%, #1f0a0f 50%, #1a0608 100%);
+            border: 2px solid rgba(255,23,68,0.45);
+            box-shadow: 0 0 30px rgba(255,23,68,0.2), 0 0 60px rgba(255,23,68,0.08), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        /* Animated border glow - win */
         .vip-popup-card.win-card::before {
             content: '';
             position: absolute;
-            inset: 0;
-            border-radius: 24px;
+            inset: -2px;
+            border-radius: 22px;
             padding: 2px;
-            background: linear-gradient(135deg, rgba(124,77,255,0.7), rgba(255,215,0,0.6), rgba(124,77,255,0.7));
+            background: linear-gradient(135deg, rgba(0,230,118,0.6), rgba(0,200,83,0.3), rgba(0,230,118,0.6));
             background-size: 200% 200%;
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
-            animation: borderGlow 3s ease-in-out infinite;
+            animation: borderGlowWin 3s ease-in-out infinite;
             pointer-events: none;
         }
 
-        /* Animated gradient border - loss */
+        /* Animated border glow - loss */
         .vip-popup-card.loss-card::before {
             content: '';
             position: absolute;
-            inset: 0;
-            border-radius: 24px;
-            padding: 1.5px;
-            background: linear-gradient(135deg, rgba(255,23,68,0.5), rgba(120,20,40,0.3), rgba(255,23,68,0.5));
+            inset: -2px;
+            border-radius: 22px;
+            padding: 2px;
+            background: linear-gradient(135deg, rgba(255,23,68,0.5), rgba(200,20,40,0.25), rgba(255,23,68,0.5));
             background-size: 200% 200%;
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
-            animation: borderGlow 4s ease-in-out infinite;
+            animation: borderGlowLoss 3.5s ease-in-out infinite;
             pointer-events: none;
         }
 
-        /* Inner highlight line at top */
-        .vip-popup-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 10%;
-            right: 10%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
-            pointer-events: none;
-            z-index: 2;
+        @keyframes borderGlowWin {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
         }
-
-        @keyframes borderGlow {
+        @keyframes borderGlowLoss {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
         }
 
-        /* Popup content padding */
+        /* ===== CLOSE BUTTON ===== */
+        .vip-close-btn {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #fff;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+        .win-card .vip-close-btn {
+            background: linear-gradient(135deg, #00E676, #00C853);
+            box-shadow: 0 2px 10px rgba(0,200,83,0.4);
+        }
+        .win-card .vip-close-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(0,230,118,0.6);
+        }
+        .loss-card .vip-close-btn {
+            background: linear-gradient(135deg, #FF1744, #D50000);
+            box-shadow: 0 2px 10px rgba(255,23,68,0.4);
+        }
+        .loss-card .vip-close-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255,23,68,0.6);
+        }
+
+        /* ===== ICON AREA (Crown/Star above card) ===== */
+        .vip-icon-area {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: -50px;
+            margin-bottom: 10px;
+            z-index: 2;
+        }
+
+        .vip-icon-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .win-card .vip-icon-circle {
+            background: linear-gradient(145deg, #FFD700, #FFA000);
+            box-shadow: 0 0 25px rgba(255,215,0,0.5), 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .loss-card .vip-icon-circle {
+            background: linear-gradient(145deg, #FF5252, #FF1744);
+            box-shadow: 0 0 25px rgba(255,23,68,0.4), 0 4px 15px rgba(0,0,0,0.4);
+        }
+
+        .vip-icon-circle i {
+            font-size: 36px;
+            color: #fff;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+
+        /* Sparkle particles around icon */
+        .vip-sparkle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            animation: sparkleFloat 2s ease-in-out infinite;
+        }
+
+        .win-card .vip-sparkle {
+            background: #FFD700;
+            box-shadow: 0 0 6px #FFD700;
+        }
+        .loss-card .vip-sparkle {
+            background: #FF1744;
+            box-shadow: 0 0 6px #FF1744;
+        }
+
+        .vip-sparkle:nth-child(1) { top: -5px; left: 50%; transform: translateX(-50%); animation-delay: 0s; }
+        .vip-sparkle:nth-child(2) { top: 10px; right: -8px; animation-delay: 0.3s; }
+        .vip-sparkle:nth-child(3) { bottom: 10px; right: -5px; animation-delay: 0.6s; }
+        .vip-sparkle:nth-child(4) { bottom: -5px; left: 50%; transform: translateX(-50%); animation-delay: 0.9s; }
+        .vip-sparkle:nth-child(5) { bottom: 10px; left: -8px; animation-delay: 1.2s; }
+        .vip-sparkle:nth-child(6) { top: 10px; left: -5px; animation-delay: 1.5s; }
+
+        @keyframes sparkleFloat {
+            0%, 100% { transform: scale(1) translateY(0); opacity: 1; }
+            50% { transform: scale(1.5) translateY(-4px); opacity: 0.6; }
+        }
+
+        /* ===== RIBBON BANNER ===== */
+        .vip-ribbon {
+            position: relative;
+            margin: 0 20px;
+            padding: 14px 30px;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .win-card .vip-ribbon {
+            background: linear-gradient(135deg, #00E676 0%, #00C853 50%, #009624 100%);
+            box-shadow: 0 4px 15px rgba(0,200,83,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+        }
+
+        .loss-card .vip-ribbon {
+            background: linear-gradient(135deg, #FF5252 0%, #FF1744 50%, #D50000 100%);
+            box-shadow: 0 4px 15px rgba(255,23,68,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+
+        /* Ribbon tail effect */
+        .vip-ribbon::before,
+        .vip-ribbon::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 0;
+            height: 0;
+            transform: translateY(-50%);
+        }
+        .vip-ribbon::before {
+            left: -12px;
+            border-top: 12px solid transparent;
+            border-bottom: 12px solid transparent;
+        }
+        .vip-ribbon::after {
+            right: -12px;
+            border-top: 12px solid transparent;
+            border-bottom: 12px solid transparent;
+        }
+
+        .win-card .vip-ribbon::before {
+            border-right: 12px solid #009624;
+        }
+        .win-card .vip-ribbon::after {
+            border-left: 12px solid #009624;
+        }
+        .loss-card .vip-ribbon::before {
+            border-right: 12px solid #B71C1C;
+        }
+        .loss-card .vip-ribbon::after {
+            border-left: 12px solid #B71C1C;
+        }
+
+        /* ===== POPUP CONTENT ===== */
         .vip-popup-content {
-            padding: 32px 24px 24px;
+            padding: 0 22px 22px;
             text-align: center;
             position: relative;
             z-index: 1;
         }
 
-        /* ===== TROPHY SECTION (Win) ===== */
-        .vip-trophy-wrap {
-            position: relative;
-            width: 110px;
-            height: 110px;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .vip-trophy-inner {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, rgba(255,215,0,0.15), rgba(124,77,255,0.1));
-            border: 2px solid rgba(255,215,0,0.35);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(124,77,255,0.2);
-            animation: trophyGlowPulse 2s ease-in-out infinite;
-            position: relative;
-            z-index: 2;
-        }
-
-        .vip-trophy-inner svg {
-            width: 44px;
-            height: 44px;
-            filter: drop-shadow(0 0 8px rgba(255,215,0,0.5));
-        }
-
-        /* Trophy ring 1 */
-        .trophy-ring-1 {
-            position: absolute;
-            inset: -4px;
-            border: 2px solid rgba(255,215,0,0.2);
-            border-radius: 50%;
-            border-top-color: rgba(255,215,0,0.7);
-            animation: ringRotate1 3s linear infinite;
-            pointer-events: none;
-        }
-
-        /* Trophy ring 2 */
-        .trophy-ring-2 {
-            position: absolute;
-            inset: 2px;
-            border: 1.5px solid rgba(124,77,255,0.15);
-            border-radius: 50%;
-            border-bottom-color: rgba(124,77,255,0.5);
-            animation: ringRotate2 2.5s linear infinite reverse;
-            pointer-events: none;
-        }
-
-        @keyframes ringRotate1 { to { transform: rotate(360deg); } }
-        @keyframes ringRotate2 { to { transform: rotate(-360deg); } }
-        @keyframes trophyGlowPulse {
-            0%, 100% { box-shadow: 0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(124,77,255,0.2); }
-            50% { box-shadow: 0 0 50px rgba(255,215,0,0.8), 0 0 80px rgba(124,77,255,0.4); }
-        }
-
-        /* ===== LOSS ICON SECTION ===== */
-        .vip-loss-icon-wrap {
-            position: relative;
-            width: 100px;
-            height: 100px;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .vip-loss-icon-inner {
-            width: 76px;
-            height: 76px;
-            border-radius: 50%;
-            background: linear-gradient(145deg, #1a0a2e, #0a0a0a);
-            border: 2px solid rgba(255,23,68,0.35);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 20px rgba(255,23,68,0.3), 0 0 40px rgba(255,23,68,0.08);
-            animation: lossIconGlow 3s ease-in-out infinite;
-            position: relative;
-            z-index: 2;
-        }
-
-        .vip-loss-icon-inner svg {
-            width: 38px;
-            height: 38px;
-            filter: drop-shadow(0 0 6px rgba(255,23,68,0.4));
-        }
-
-        .loss-ring {
-            position: absolute;
-            inset: -6px;
-            border: 1.5px solid rgba(255,23,68,0.15);
-            border-radius: 50%;
-            border-left-color: rgba(255,23,68,0.45);
-            animation: lossRingRotate 4s linear infinite;
-            pointer-events: none;
-        }
-
-        /* Loss background pulse */
-        .loss-bg-pulse {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 180px;
-            height: 180px;
-            background: radial-gradient(circle, rgba(255,23,68,0.06) 0%, transparent 70%);
-            border-radius: 50%;
-            animation: lossBgPulse 3s ease-in-out infinite;
-            pointer-events: none;
-        }
-
-        @keyframes lossIconGlow {
-            0%, 100% { box-shadow: 0 0 15px rgba(255,23,68,0.2), 0 0 30px rgba(255,23,68,0.05); }
-            50% { box-shadow: 0 0 25px rgba(255,23,68,0.35), 0 0 50px rgba(255,23,68,0.1); }
-        }
-        @keyframes lossRingRotate { to { transform: rotate(360deg); } }
-        @keyframes lossBgPulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-        }
-
-        /* ===== TITLE STYLES ===== */
-        .vip-win-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 26px;
-            font-weight: 900;
-            letter-spacing: 3px;
-            margin-bottom: 4px;
-            line-height: 1.2;
-        }
-        .vip-win-title .vip-gold-text {
-            color: #FFD700;
-            text-shadow: 0 0 15px rgba(255,215,0,0.4);
-        }
-        .vip-win-title .vip-white-text {
-            color: #fff;
-        }
-        .vip-win-title .star-icon {
-            color: #FFD700;
-            font-size: 18px;
-            margin: 0 6px;
-            text-shadow: 0 0 10px rgba(255,215,0,0.5);
-        }
-
+        /* ===== TITLE STYLES (kept for JS compat) ===== */
+        .vip-win-title,
         .vip-loss-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 24px;
-            font-weight: 900;
-            letter-spacing: 4px;
-            margin-bottom: 4px;
-            line-height: 1.2;
-        }
-        .vip-loss-title .loss-muted {
-            color: #888;
-        }
-        .vip-loss-title .loss-white {
-            color: #fff;
+            display: none;
         }
 
-        /* Decorative line */
         .vip-deco-line {
-            width: 50px;
-            height: 2px;
-            margin: 12px auto;
-            border-radius: 1px;
-        }
-        .vip-deco-line.win-line {
-            background: linear-gradient(90deg, transparent, #FFD700, transparent);
-        }
-        .vip-deco-line.loss-line {
-            background: linear-gradient(90deg, transparent, rgba(255,23,68,0.5), transparent);
+            display: none;
         }
 
         /* ===== RESULT TAGS ===== */
@@ -735,7 +727,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            margin-bottom: 6px;
+            margin: 16px 0 14px;
         }
 
         .vip-result-tag {
@@ -754,12 +746,10 @@
         .vip-result-tag.rt-num { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
         .vip-result-tag.rt-size { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); }
 
-        /* Win tag stagger */
         .win-card .vip-result-tag:nth-child(1) { animation-delay: 0.4s; }
         .win-card .vip-result-tag:nth-child(2) { animation-delay: 0.55s; }
         .win-card .vip-result-tag:nth-child(3) { animation-delay: 0.7s; }
 
-        /* Loss tag stagger */
         .loss-card .vip-result-tag:nth-child(1) { animation-delay: 0.3s; }
         .loss-card .vip-result-tag:nth-child(2) { animation-delay: 0.5s; }
         .loss-card .vip-result-tag:nth-child(3) { animation-delay: 0.7s; }
@@ -774,47 +764,79 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 2px;
-            color: #FFD700;
+            color: rgba(255,255,255,0.6);
             margin-bottom: 6px;
-            margin-top: 16px;
+            margin-top: 4px;
         }
 
         .vip-win-amount {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 40px;
+            font-size: 32px;
             font-weight: 900;
             line-height: 1.1;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #FFD700 0%, #FFF8DC 25%, #FFD700 50%, #B8860B 75%, #FFD700 100%);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: goldShimmer 2.5s linear infinite;
-            filter: drop-shadow(0 0 12px rgba(255,215,0,0.3));
+            margin-bottom: 6px;
+            color: #FFD700;
+            text-shadow: 0 0 15px rgba(255,215,0,0.4);
         }
 
         .vip-loss-amount {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 32px;
-            font-weight: 900;
-            color: #FF1744;
-            margin-bottom: 10px;
-            margin-top: 12px;
-            text-shadow: 0 0 15px rgba(255,23,68,0.3);
-        }
-
-        @keyframes goldShimmer {
-            0% { background-position: -200% center; }
-            100% { background-position: 200% center; }
+            font-size: 22px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.7);
+            margin: 12px 0 6px;
         }
 
         /* ===== PERIOD INFO ===== */
         .vip-period-info {
-            color: #888;
-            font-size: 12px;
+            color: rgba(255,255,255,0.55);
+            font-size: 13px;
             line-height: 1.6;
+            margin-bottom: 16px;
+        }
+        .vip-period-info .period-label {
+            color: rgba(255,255,255,0.4);
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        .vip-period-info .period-number {
+            color: #fff;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+        }
+
+        /* ===== CONTINUE BUTTON ===== */
+        .vip-continue-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 800;
+            color: #fff;
+            cursor: pointer;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
             margin-bottom: 14px;
+        }
+
+        .win-card .vip-continue-btn {
+            background: linear-gradient(135deg, #00E676 0%, #00C853 50%, #009624 100%);
+            box-shadow: 0 4px 15px rgba(0,200,83,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+        }
+        .win-card .vip-continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,200,83,0.5);
+        }
+
+        .loss-card .vip-continue-btn {
+            background: linear-gradient(135deg, #FF5252 0%, #FF1744 50%, #D50000 100%);
+            box-shadow: 0 4px 15px rgba(255,23,68,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+        }
+        .loss-card .vip-continue-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255,23,68,0.5);
         }
 
         /* ===== AUTO CLOSE ===== */
@@ -822,12 +844,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .vip-auto-close-text {
             font-size: 11px;
-            color: #666;
+            color: rgba(255,255,255,0.35);
             display: flex;
             align-items: center;
             gap: 5px;
@@ -837,20 +859,20 @@
 
         .vip-progress-track {
             width: 80px;
-            height: 2px;
+            height: 3px;
             background: rgba(255,255,255,0.08);
-            border-radius: 1px;
+            border-radius: 2px;
             overflow: hidden;
         }
 
         .vip-progress-fill {
             height: 100%;
-            border-radius: 1px;
+            border-radius: 2px;
             animation: progressShrink 3s linear forwards;
             transform-origin: left;
         }
         .vip-progress-fill.win-fill {
-            background: linear-gradient(90deg, #00E676, #FFD700);
+            background: linear-gradient(90deg, #00E676, #00C853);
         }
         .vip-progress-fill.loss-fill {
             background: linear-gradient(90deg, #FF1744, #D50000);
@@ -863,7 +885,7 @@
 
         /* ===== ENTRANCE ANIMATIONS ===== */
         .win-card {
-            animation: winVipEntrance 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            animation: winVipEntrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
 
         .loss-card {
@@ -871,14 +893,14 @@
         }
 
         @keyframes winVipEntrance {
-            0% { opacity: 0; transform: scale(0.3) translateY(60px); filter: blur(10px); }
-            60% { opacity: 1; transform: scale(1.05) translateY(0); filter: blur(0px); }
-            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
+            0% { opacity: 0; transform: scale(0.5) translateY(40px); }
+            60% { opacity: 1; transform: scale(1.03) translateY(0); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
         }
 
         @keyframes lossVipEntrance {
-            0% { opacity: 0; transform: scale(0.8) translateY(30px); filter: blur(8px); }
-            100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
+            0% { opacity: 0; transform: scale(0.85) translateY(25px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
         }
 
         /* Exit animation */
@@ -886,21 +908,23 @@
             animation: vipExit 0.3s ease-in forwards !important;
         }
         @keyframes vipExit {
-            to { opacity: 0; transform: scale(0.9); filter: blur(4px); }
+            to { opacity: 0; transform: scale(0.9); }
         }
 
         /* ===== RESPONSIVE ===== */
         @media (max-width: 340px) {
-            .vip-popup-content { padding: 24px 16px 20px; }
-            .vip-trophy-wrap { width: 95px; height: 95px; }
-            .vip-trophy-inner { width: 68px; height: 68px; }
-            .vip-trophy-inner svg { width: 36px; height: 36px; }
-            .vip-win-amount { font-size: 32px; }
-            .vip-loss-amount { font-size: 26px; }
-            .vip-win-title { font-size: 22px; }
-            .vip-loss-title { font-size: 20px; }
+            .vip-popup-card { max-width: 300px; }
+            .vip-popup-content { padding: 0 16px 18px; }
+            .vip-ribbon { font-size: 20px; padding: 12px 24px; margin: 0 15px; }
+            .vip-icon-circle { width: 70px; height: 70px; }
+            .vip-icon-circle i { font-size: 30px; }
+            .vip-icon-area { margin-top: -42px; }
+            .vip-win-amount { font-size: 26px; }
+            .vip-loss-amount { font-size: 18px; }
+            .vip-result-row { gap: 6px; margin: 12px 0 10px; }
+            .vip-result-tag { padding: 5px 10px; font-size: 11px; }
+            .vip-continue-btn { padding: 12px; font-size: 14px; }
         }
-
         /* ===== SAVED ACCOUNTS SECTION ===== */
         .saved-accounts-box { background:rgba(124,77,255,0.05); border:1px solid rgba(124,77,255,0.15); border-radius:10px; padding:12px; margin-bottom:12px; }
         .saved-accounts-title { font-size:12px; font-weight:600; color:#888; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
@@ -1471,43 +1495,27 @@
 
         <!-- Win Popup -->
         <div class="vip-popup-card win-card" id="winPopupBox" style="display:none;">
+            <!-- Close Button -->
+            <button class="vip-close-btn" onclick="closeResultPopup()"><i class="fas fa-times"></i></button>
+
+            <!-- Crown Icon with Sparkles -->
+            <div class="vip-icon-area">
+                <div class="vip-icon-circle">
+                    <i class="fas fa-crown"></i>
+                    <!-- Sparkles -->
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                </div>
+            </div>
+
+            <!-- Ribbon Banner -->
+            <div class="vip-ribbon">You Win</div>
+
             <div class="vip-popup-content">
-                <!-- Trophy with rotating rings -->
-                <div class="vip-trophy-wrap">
-                    <div class="trophy-ring-1"></div>
-                    <div class="trophy-ring-2"></div>
-                    <div class="vip-trophy-inner">
-                        <!-- Crown SVG -->
-                        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <linearGradient id="crownGrad" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
-                                    <stop offset="0%" stop-color="#FFE55C"/>
-                                    <stop offset="50%" stop-color="#FFD700"/>
-                                    <stop offset="100%" stop-color="#B8860B"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M8 44L12 20L22 28L32 12L42 28L52 20L56 44H8Z" fill="url(#crownGrad)" stroke="#B8860B" stroke-width="1.5" stroke-linejoin="round"/>
-                            <ellipse cx="32" cy="48" rx="20" ry="4" fill="url(#crownGrad)" stroke="#B8860B" stroke-width="1"/>
-                            <circle cx="32" cy="18" r="3" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
-                            <circle cx="14" cy="24" r="2.5" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
-                            <circle cx="50" cy="24" r="2.5" fill="#FFF8DC" stroke="#B8860B" stroke-width="0.8"/>
-                            <path d="M16 38H20V42H16V38Z" fill="#7C4DFF" opacity="0.8"/>
-                            <path d="M28 38H32V42H28V38Z" fill="#7C4DFF" opacity="0.8"/>
-                            <path d="M40 38H44V42H40V38Z" fill="#7C4DFF" opacity="0.8"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <!-- VIP WINNER Title -->
-                <div class="vip-win-title">
-                    <span class="star-icon">&#10022;</span>
-                    <span class="vip-gold-text">Z</span>
-                    <span class="vip-white-text">WINNER</span>
-                    <span class="star-icon">&#10022;</span>
-                </div>
-
-                <div class="vip-deco-line win-line"></div>
-
                 <!-- Result Tags -->
                 <div class="vip-result-row">
                     <span class="vip-result-tag rt-color-red" id="winResultColor">Red</span>
@@ -1515,14 +1523,18 @@
                     <span class="vip-result-tag rt-size" id="winResultSize">Small</span>
                 </div>
 
-                <!-- You Won Label -->
-                <div class="vip-win-label">You Won</div>
-
-                <!-- Win Amount with shimmer -->
+                <!-- Win Amount -->
+                <div class="vip-win-label">Win Amount</div>
                 <div class="vip-win-amount" id="winBonusAmount">Rs 0.00</div>
 
                 <!-- Period Info -->
-                <div class="vip-period-info" id="winPeriodInfo">Period: WinGo 30sec<br>-</div>
+                <div class="vip-period-info" id="winPeriodInfo">
+                    <div class="period-label">Period</div>
+                    <div class="period-number" id="winPeriodNumber">-</div>
+                </div>
+
+                <!-- Continue Button -->
+                <button class="vip-continue-btn" onclick="closeResultPopup()">Continue</button>
 
                 <!-- Auto Close -->
                 <div class="vip-auto-close">
@@ -1535,38 +1547,34 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Hidden title for JS compat -->
+            <div class="vip-win-title" style="display:none;"><span class="vip-gold-text">WINNER</span></div>
         </div>
 
         <!-- Loss Popup -->
         <div class="vip-popup-card loss-card" id="lossPopupBox" style="display:none;">
+            <!-- Close Button -->
+            <button class="vip-close-btn" onclick="closeResultPopup()"><i class="fas fa-times"></i></button>
+
+            <!-- Star Icon with Sparkles -->
+            <div class="vip-icon-area">
+                <div class="vip-icon-circle">
+                    <i class="fas fa-star"></i>
+                    <!-- Sparkles -->
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                    <div class="vip-sparkle"></div>
+                </div>
+            </div>
+
+            <!-- Ribbon Banner -->
+            <div class="vip-ribbon">You Lose</div>
+
             <div class="vip-popup-content">
-                <!-- Loss Icon with rings -->
-                <div class="vip-loss-icon-wrap">
-                    <div class="loss-bg-pulse"></div>
-                    <div class="loss-ring"></div>
-                    <div class="vip-loss-icon-inner">
-                        <!-- Shield X SVG -->
-                        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <linearGradient id="shieldGrad" x1="32" y1="4" x2="32" y2="60" gradientUnits="userSpaceOnUse">
-                                    <stop offset="0%" stop-color="#FF5252"/>
-                                    <stop offset="100%" stop-color="#FF1744"/>
-                                </linearGradient>
-                            </defs>
-                            <path d="M32 4L8 16V30C8 46 18.5 56.5 32 60C45.5 56.5 56 46 56 30V16L32 4Z" stroke="url(#shieldGrad)" stroke-width="3" stroke-linejoin="round" fill="none"/>
-                            <path d="M24 24L40 40M40 24L24 40" stroke="url(#shieldGrad)" stroke-width="4" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                </div>
-
-                <!-- ROUND RESULT Title -->
-                <div class="vip-loss-title">
-                    <span class="loss-muted">LOSS</span>
-                    <span class="loss-white"> RESULT</span>
-                </div>
-
-                <div class="vip-deco-line loss-line"></div>
-
                 <!-- Result Tags -->
                 <div class="vip-result-row">
                     <span class="vip-result-tag rt-color-red" id="lossResultColor">Red</span>
@@ -1574,11 +1582,17 @@
                     <span class="vip-result-tag rt-size" id="lossResultSize">Small</span>
                 </div>
 
-                <!-- Loss Amount -->
-                <div class="vip-loss-amount" id="lossAmount">-Rs 0.00</div>
+                <!-- Better Luck Message -->
+                <div class="vip-loss-amount" id="lossAmount">Better Luck Next Time</div>
 
                 <!-- Period Info -->
-                <div class="vip-period-info" id="lossPeriodInfo">Period: -</div>
+                <div class="vip-period-info" id="lossPeriodInfo">
+                    <div class="period-label">Period</div>
+                    <div class="period-number" id="lossPeriodNumber">-</div>
+                </div>
+
+                <!-- Continue Button -->
+                <button class="vip-continue-btn" onclick="closeResultPopup()">Continue</button>
 
                 <!-- Auto Close -->
                 <div class="vip-auto-close">
@@ -1591,9 +1605,11 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Hidden title for JS compat -->
+            <div class="vip-loss-title" style="display:none;"><span class="loss-muted">LOSS</span></div>
         </div>
     </div>
-
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
@@ -1625,6 +1641,8 @@
         let addAccMethod = 'jazzcash';
         let lastTimerValue = -1;
         let shownResults = new Set();
+        let shownPeriods = new Set();         // Track periods that already showed popup
+        let isShowingResultPopup = false;     // Guard against overlapping popups
         let adminSettings = {};
         let currentGameMode = 'random';
         let resultPopupTimer = null;
@@ -3408,8 +3426,9 @@
             betResultsQueryRef.on('value', async snap => {
                 const bets = snap.val() || {};
                 for(const [betId, bet] of Object.entries(bets)) {
-                    if(bet.processed && !shownResults.has(betId)) {
+                    if(bet.processed && !shownResults.has(betId) && !shownPeriods.has(bet.period)) {
                         shownResults.add(betId);
+                        shownPeriods.add(bet.period);  // Ensure popup shows only once per period
                         saveShownResults();
                         await showResultPopup(bet);
                     }
@@ -3418,6 +3437,10 @@
         }
 
         async function showResultPopup(bet) {
+            // Guard: prevent overlapping popups
+            if(isShowingResultPopup) return;
+            isShowingResultPopup = true;
+
             const popup = document.getElementById('resultPopup');
             const winBox = document.getElementById('winPopupBox');
             const lossBox = document.getElementById('lossPopupBox');
@@ -3472,7 +3495,8 @@
                 document.getElementById('winResultNumber').textContent = resultNum;
                 document.getElementById('winResultSize').textContent = resultSize;
                 document.getElementById('winBonusAmount').textContent = 'Rs ' + (bet.winAmount || 0).toFixed(2);
-                document.getElementById('winPeriodInfo').innerHTML = 'Period: WinGo 30sec<br>' + (bet.period || '-');
+                document.getElementById('winPeriodInfo').querySelector('.period-label').textContent = 'Period';
+                document.getElementById('winPeriodInfo').querySelector('.period-number').textContent = bet.period || '-';
 
                 // Reset progress bar
                 const winFill = winBox.querySelector('.vip-progress-fill');
@@ -3510,7 +3534,8 @@
                 document.getElementById('lossResultNumber').textContent = resultNum;
                 document.getElementById('lossResultSize').textContent = resultSize;
                 document.getElementById('lossAmount').textContent = '-Rs ' + (bet.amount || 0).toFixed(2);
-                document.getElementById('lossPeriodInfo').textContent = 'Period: ' + (bet.period || '-');
+                document.getElementById('lossPeriodInfo').querySelector('.period-label').textContent = 'Period';
+                document.getElementById('lossPeriodInfo').querySelector('.period-number').textContent = bet.period || '-';
 
                 // Reset progress bar
                 const lossFill = lossBox.querySelector('.vip-progress-fill');
@@ -3559,6 +3584,7 @@
                 lossBox.classList.remove('vip-popup-exit');
                 stopWinParticles();
                 if(resultPopupTimer) { clearTimeout(resultPopupTimer); resultPopupTimer = null; }
+                isShowingResultPopup = false;  // Release guard
             }, 280);
         }
 
