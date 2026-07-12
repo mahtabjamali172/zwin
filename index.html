@@ -1138,7 +1138,6 @@
                     <div class="profile-info">
                         <div class="profile-name-row">
                             <span class="profile-name" id="profileName">User</span>
-                            <span class="profile-vip-badge"><i class="fas fa-crown"></i> VIP</span>
                         </div>
                         <div class="profile-uid">UID | <span id="profileUid">-</span> <i class="fas fa-copy" onclick="copyUid()"></i></div>
                         <div class="profile-last-login">Last login: <span id="profileLastLogin">-</span></div>
@@ -2574,7 +2573,12 @@
             initOnlineDetection();
             historyListenerActive = false;
 
-            // Load history IMMEDIATELY before anything else (so user sees latest 10 instantly)
+            // CRITICAL FIX: Sync game state FIRST before loading history.
+            // This ensures the current period is immediately correct on startup.
+            // Without this, old periods display first then jump to new ones.
+            await syncGameState();
+
+            // Now load history AFTER period is synced - shows latest 10 only
             await loadHistory();
             listenHistory();
             startHistoryHeartbeat(); // CRITICAL FIX: Keep history alive with health checks
@@ -2583,9 +2587,6 @@
             listenGameMode();
             listenNotifications();
             listenMinDeposit();
-
-            // Sync game state (timer + period)
-            await syncGameState();
 
             // CRITICAL FIX: Process any bets that got stuck pending while user was offline
             await processMissedBets();
@@ -2875,6 +2876,50 @@
                         return hashCode(period + '_tie_' + a.number) - hashCode(period + '_tie_' + b.number);
                     });
                     const best = payouts[0];
+                    return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
+                }
+
+                if(currentGameMode === 'ransom') {
+                    // Ransom Mode: ~50% win rate. Calculate which number gives closest to 50% total bet amount winning.
+                    const totalBetAmount = Object.values(bets).reduce((sum, b) => b.processed ? sum : sum + (b.amount || 0), 0);
+                    if(totalBetAmount === 0) {
+                        // No bets, use deterministic random
+                        const seed = Math.abs(hashCode(period + '_ransommode'));
+                        const selectedNum = seed % 10;
+                        const selectedColor = getNumberColor(selectedNum);
+                        const selectedSize = selectedNum >= 5 ? 'Big' : 'Small';
+                        return { period, number: selectedNum, color: selectedColor, size: selectedSize, timestamp: firebase.database.ServerValue.TIMESTAMP };
+                    }
+                    const winRates = [];
+                    for(let num = 0; num <= 9; num++) {
+                        const color = getNumberColor(num);
+                        const size = num >= 5 ? 'Big' : 'Small';
+                        let winningAmount = 0;
+                        Object.values(bets).forEach(bet => {
+                            if(bet.processed) return;
+                            let win = false;
+                            if(bet.betType === 'color') {
+                                if(bet.selection === 'green' && color === 'Green') win = true;
+                                else if(bet.selection === 'red' && color === 'Red') win = true;
+                            } else if(bet.betType === 'number') {
+                                if(parseInt(bet.selection) === num) win = true;
+                            } else if(bet.betType === 'bs') {
+                                if(bet.selection === 'big' && size === 'Big') win = true;
+                                else if(bet.selection === 'small' && size === 'Small') win = true;
+                            }
+                            if(win) winningAmount += (bet.amount || 0);
+                        });
+                        const winRate = winningAmount / totalBetAmount;
+                        const distanceFrom50 = Math.abs(winRate - 0.5);
+                        winRates.push({ number: num, color, size, winRate, distanceFrom50 });
+                    }
+                    // Sort by distance from 50% (ascending = closest to 50% first)
+                    winRates.sort((a, b) => {
+                        if(a.distanceFrom50 !== b.distanceFrom50) return a.distanceFrom50 - b.distanceFrom50;
+                        // DETERMINISTIC TIEBREAKER for identical distances
+                        return hashCode(period + '_ransomtie_' + a.number) - hashCode(period + '_ransomtie_' + b.number);
+                    });
+                    const best = winRates[0];
                     return { period, number: best.number, color: best.color, size: best.size, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 }
 
@@ -3268,9 +3313,18 @@
             // This loads the latest 10 completed periods BEFORE showing the history.
             // The user sees existing history instantly - the game looks like it's been running.
             try {
-                const snap = await db.ref('game/results').orderByKey().limitToLast(10).once('value');
+                // Fetch latest 20 from Firebase, then filter to show only latest 10 relevant ones
+                const snap = await db.ref('game/results').orderByKey().limitToLast(20).once('value');
                 const results = snap.val() || {};
-                const list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+                let list = Object.entries(results).sort((a, b) => b[0].localeCompare(a[0]));
+
+                // CRITICAL FIX: If currentPeriod is known, only show periods before it.
+                // This prevents showing outdated periods when app was closed for a long time.
+                if(currentPeriod) {
+                    list = list.filter(([period, r]) => period < currentPeriod);
+                }
+                // Only keep latest 10 completed periods
+                list = list.slice(0, 10);
 
                 // CRITICAL: Lock ALL loaded results immediately so they never change
                 list.forEach(([period, r]) => {
