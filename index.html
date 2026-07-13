@@ -10,6 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <script src='https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js'></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
         body { font-family:'Inter','Segoe UI',Arial,sans-serif; background:#0a0a0a; color:#fff; overflow-x:hidden; }
@@ -961,6 +962,93 @@
         .notif-time { font-size:10px; color:#888; }
         .notif-msg { font-size:12px; color:#ccc; padding-left:16px; line-height:1.4; }
 
+        /* ===== SMART DEPOSIT VERIFICATION ===== */
+        .smart-deposit-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1000; display:none; align-items:flex-end; justify-content:center; backdrop-filter:blur(6px); }
+        .smart-deposit-overlay.active { display:flex; }
+        .smart-deposit-box { background:linear-gradient(135deg,#111,#1a0a2e); border-radius:20px 20px 0 0; padding:20px; width:100%; max-width:420px; max-height:95vh; overflow-y:auto; border:1px solid rgba(124,77,255,0.3); border-bottom:none; animation:slideUp .3s ease; }
+        .smart-deposit-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid rgba(124,77,255,0.2); }
+        .smart-deposit-title { font-size:16px; font-weight:800; color:#FFD700; display:flex; align-items:center; gap:8px; }
+        .smart-deposit-close { width:32px; height:32px; border-radius:50%; background:rgba(124,77,255,0.15); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#7C4DFF; transition:all 0.3s; }
+        .smart-deposit-close:hover { background:rgba(124,77,255,0.3); color:#FFD700; }
+
+        .sd-amount-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+        .sd-amount-btn { padding:14px 8px; border:2px solid rgba(124,77,255,0.2); border-radius:12px; background:#0a0a0a; cursor:pointer; text-align:center; font-weight:700; color:#ccc; transition:all 0.3s; font-size:14px; }
+        .sd-amount-btn:hover { border-color:rgba(124,77,255,0.5); color:#FFD700; }
+        .sd-amount-btn.active { border-color:#FFD700; background:rgba(255,215,0,0.1); color:#FFD700; box-shadow:0 0 12px rgba(255,215,0,0.15); }
+        .sd-amount-btn .sd-amt-label { font-size:16px; font-weight:800; }
+        .sd-amount-btn .sd-amt-bonus { font-size:10px; color:#00E676; margin-top:2px; }
+
+        .sd-till-box { background:linear-gradient(135deg,rgba(124,77,255,0.08),rgba(124,77,255,0.02)); border:2px dashed rgba(124,77,255,0.4); border-radius:14px; padding:16px; margin-bottom:16px; text-align:center; }
+        .sd-till-label { font-size:12px; color:#888; margin-bottom:6px; font-weight:600; }
+        .sd-till-number { font-size:24px; font-weight:900; color:#FFD700; font-family:'JetBrains Mono',monospace; letter-spacing:1px; }
+        .sd-till-name { font-size:12px; color:#aaa; margin-top:4px; }
+        .sd-copy-btn { display:inline-flex; align-items:center; gap:6px; background:rgba(124,77,255,0.2); border:1px solid rgba(124,77,255,0.3); border-radius:8px; padding:6px 14px; font-size:12px; color:#7C4DFF; cursor:pointer; margin-top:10px; transition:all 0.3s; font-weight:600; }
+        .sd-copy-btn:hover { background:rgba(124,77,255,0.3); color:#FFD700; border-color:#FFD700; }
+        .sd-copy-btn.copied { background:rgba(0,230,118,0.2); color:#00E676; border-color:#00E676; }
+
+        .sd-instructions { background:rgba(255,215,0,0.06); border:1px solid rgba(255,215,0,0.15); border-radius:10px; padding:12px; margin-bottom:16px; font-size:12px; color:#FFD700; line-height:1.7; }
+        .sd-instructions ol { margin:0; padding-left:18px; }
+        .sd-instructions li { margin-bottom:4px; }
+
+        .sd-upload-area { border:2px dashed rgba(124,77,255,0.4); border-radius:14px; padding:24px; text-align:center; cursor:pointer; transition:all 0.3s; background:rgba(124,77,255,0.03); margin-bottom:16px; position:relative; }
+        .sd-upload-area:hover { border-color:#FFD700; background:rgba(255,215,0,0.05); }
+        .sd-upload-area.has-file { border-color:#00E676; background:rgba(0,230,118,0.05); }
+        .sd-upload-area i { font-size:36px; color:#7C4DFF; margin-bottom:10px; }
+        .sd-upload-text { font-size:13px; color:#888; margin-bottom:6px; }
+        .sd-upload-hint { font-size:11px; color:#555; }
+        .sd-upload-input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+
+        .sd-screenshot-preview { position:relative; width:100%; border-radius:10px; overflow:hidden; margin-bottom:12px; border:1px solid rgba(124,77,255,0.3); }
+        .sd-screenshot-preview img { width:100%; display:block; }
+        .sd-screenshot-remove { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:rgba(255,23,68,0.9); border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; }
+
+        .sd-ocr-status { display:flex; align-items:center; gap:10px; padding:12px; border-radius:10px; margin-bottom:16px; font-size:13px; font-weight:600; }
+        .sd-ocr-status.processing { background:rgba(68,138,255,0.1); border:1px solid rgba(68,138,255,0.2); color:#448AFF; }
+        .sd-ocr-status.success { background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.2); color:#00E676; }
+        .sd-ocr-status.warning { background:rgba(255,152,0,0.1); border:1px solid rgba(255,152,0,0.2); color:#FF9800; }
+        .sd-ocr-status.error { background:rgba(255,23,68,0.1); border:1px solid rgba(255,23,68,0.2); color:#FF1744; }
+        .sd-ocr-spinner { width:20px; height:20px; border:2px solid rgba(68,138,255,0.2); border-top-color:#448AFF; border-radius:50%; animation:spin 0.8s linear infinite; }
+
+        .sd-ocr-results { background:#0a0a0a; border-radius:12px; padding:14px; margin-bottom:16px; border:1px solid rgba(124,77,255,0.15); }
+        .sd-ocr-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(124,77,255,0.08); font-size:13px; }
+        .sd-ocr-row:last-child { border-bottom:none; }
+        .sd-ocr-label { color:#888; font-weight:600; }
+        .sd-ocr-value { color:#FFD700; font-weight:700; font-family:'JetBrains Mono',monospace; }
+        .sd-ocr-value.missing { color:#FF1744; }
+        .sd-ocr-value.matched { color:#00E676; }
+        .sd-ocr-value.low-confidence { color:#FF9800; }
+        .sd-ocr-confidence { font-size:11px; color:#888; margin-top:8px; padding-top:8px; border-top:1px solid rgba(124,77,255,0.1); }
+
+        .sd-validation-box { background:#0a0a0a; border-radius:12px; padding:14px; margin-bottom:16px; border:1px solid rgba(124,77,255,0.15); }
+        .sd-validation-title { font-size:13px; font-weight:700; color:#FFD700; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+        .sd-validation-item { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:12px; }
+        .sd-validation-item i { font-size:14px; }
+        .sd-validation-item .pass { color:#00E676; }
+        .sd-validation-item .fail { color:#FF1744; }
+        .sd-validation-item .warn { color:#FF9800; }
+        .sd-validation-item .pending-icon { color:#888; }
+
+        .sd-submit-btn { width:100%; padding:14px; background:linear-gradient(135deg,#FFD700,#FFA000); color:#000; border:none; border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; transition:all 0.3s; letter-spacing:1px; margin-bottom:10px; }
+        .sd-submit-btn:hover:not(:disabled) { box-shadow:0 0 20px rgba(255,215,0,0.4); transform:translateY(-1px); }
+        .sd-submit-btn:disabled { background:#333; color:#666; cursor:not-allowed; box-shadow:none; }
+
+        .sd-security-note { font-size:11px; color:#555; text-align:center; line-height:1.5; }
+        .sd-security-note i { color:#00E676; }
+
+        .sd-step-indicator { display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:16px; }
+        .sd-step { display:flex; align-items:center; gap:6px; font-size:12px; color:#555; font-weight:600; }
+        .sd-step.active { color:#FFD700; }
+        .sd-step.completed { color:#00E676; }
+        .sd-step-dot { width:24px; height:24px; border-radius:50%; background:#1a1a1a; border:2px solid #333; display:flex; align-items:center; justify-content:center; font-size:11px; }
+        .sd-step.active .sd-step-dot { border-color:#FFD700; color:#FFD700; }
+        .sd-step.completed .sd-step-dot { border-color:#00E676; background:rgba(0,230,118,0.15); color:#00E676; }
+        .sd-step-line { width:20px; height:2px; background:#333; }
+        .sd-step.completed + .sd-step-line { background:#00E676; }
+
+        /* Deposit request status styles for transaction list */
+        .trans-status.verification-pending { background:rgba(68,138,255,0.15); color:#448AFF; }
+        .trans-status.under-review { background:rgba(255,152,0,0.15); color:#FF9800; }
+
         /* ===== RESPONSIVE ===== */
         @media(min-width:600px) {
             body { max-width:480px; margin:0 auto; }
@@ -1396,6 +1484,134 @@
         </div>
     </div>
 
+    <!-- Smart Deposit Popup -->
+    <div class="smart-deposit-overlay" id="smartDepositPopup">
+        <div class="smart-deposit-box">
+            <div class="smart-deposit-head">
+                <span class="smart-deposit-title"><i class="fas fa-shield-alt" style="color:#00E676;"></i> Smart Deposit</span>
+                <button class="smart-deposit-close" onclick="closeSmartDeposit()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="sd-step-indicator">
+                <div class="sd-step active" id="sdStep1"><div class="sd-step-dot">1</div><span>Amount</span></div>
+                <div class="sd-step-line"></div>
+                <div class="sd-step" id="sdStep2"><div class="sd-step-dot">2</div><span>Pay</span></div>
+                <div class="sd-step-line"></div>
+                <div class="sd-step" id="sdStep3"><div class="sd-step-dot">3</div><span>Verify</span></div>
+            </div>
+
+            <!-- Amount Selection -->
+            <div id="sdAmountSection">
+                <div style="font-size:13px;color:#888;margin-bottom:10px;font-weight:600;"><i class="fas fa-coins" style="color:#FFD700;"></i> Select Deposit Amount</div>
+                <div class="sd-amount-grid">
+                    <button class="sd-amount-btn" onclick="selectSdAmount(500,this)">
+                        <div class="sd-amt-label">Rs 500</div>
+                        <div class="sd-amt-bonus" id="sdBonus500"></div>
+                    </button>
+                    <button class="sd-amount-btn" onclick="selectSdAmount(1000,this)">
+                        <div class="sd-amt-label">Rs 1,000</div>
+                        <div class="sd-amt-bonus" id="sdBonus1000"></div>
+                    </button>
+                    <button class="sd-amount-btn" onclick="selectSdAmount(2000,this)">
+                        <div class="sd-amt-label">Rs 2,000</div>
+                        <div class="sd-amt-bonus" id="sdBonus2000"></div>
+                    </button>
+                    <button class="sd-amount-btn" onclick="selectSdAmount(5000,this)">
+                        <div class="sd-amt-label">Rs 5,000</div>
+                        <div class="sd-amt-bonus" id="sdBonus5000"></div>
+                    </button>
+                    <button class="sd-amount-btn" onclick="selectSdAmount(10000,this)">
+                        <div class="sd-amt-label">Rs 10,000</div>
+                        <div class="sd-amt-bonus" id="sdBonus10000"></div>
+                    </button>
+                    <button class="sd-amount-btn" onclick="selectSdAmount(20000,this)">
+                        <div class="sd-amt-label">Rs 20,000</div>
+                        <div class="sd-amt-bonus" id="sdBonus20000"></div>
+                    </button>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:12px;color:#888;font-weight:600;display:block;margin-bottom:6px;">Custom Amount</label>
+                    <input type="number" id="sdCustomAmount" placeholder="Enter amount (Min 500)" min="500" style="width:100%;padding:12px;border:1px solid rgba(124,77,255,0.2);border-radius:10px;background:#0a0a0a;color:#fff;font-size:15px;outline:none;font-family:'JetBrains Mono',monospace;" oninput="onSdCustomAmount(this.value)">
+                </div>
+            </div>
+
+            <!-- Till Payment Info -->
+            <div class="sd-till-box">
+                <div class="sd-till-label"><i class="fas fa-qrcode" style="color:#FFD700;"></i> Pay to this Till Number</div>
+                <div class="sd-till-number" id="sdTillNumber">Loading...</div>
+                <div class="sd-till-name" id="sdTillName">ZWIN VIP Admin</div>
+                <button class="sd-copy-btn" id="sdCopyTillBtn" onclick="copyTillNumber()"><i class="fas fa-copy"></i> Copy Till Number</button>
+            </div>
+
+            <!-- Instructions -->
+            <div class="sd-instructions">
+                <ol>
+                    <li>Open your Easypaisa or JazzCash app</li>
+                    <li>Send money to the Till number above</li>
+                    <li>Take a screenshot of the payment confirmation</li>
+                    <li>Upload the screenshot below for verification</li>
+                </ol>
+            </div>
+
+            <!-- Screenshot Upload -->
+            <div style="font-size:13px;color:#888;margin-bottom:10px;font-weight:600;"><i class="fas fa-camera" style="color:#FFD700;"></i> Upload Payment Screenshot</div>
+            <div class="sd-upload-area" id="sdUploadArea" onclick="document.getElementById('sdScreenshotInput').click()">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <div class="sd-upload-text">Tap to upload payment screenshot</div>
+                <div class="sd-upload-hint">JPG, PNG supported. Max 5MB.</div>
+                <input type="file" class="sd-upload-input" id="sdScreenshotInput" accept="image/*" onchange="handleSdScreenshotUpload(this)">
+            </div>
+
+            <!-- Screenshot Preview -->
+            <div id="sdScreenshotPreview" style="display:none;">
+                <div class="sd-screenshot-preview">
+                    <img id="sdPreviewImg" src="" alt="Screenshot preview">
+                    <button class="sd-screenshot-remove" onclick="removeSdScreenshot()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+
+            <!-- OCR Processing Status -->
+            <div id="sdOcrStatus" style="display:none;">
+                <div class="sd-ocr-status processing" id="sdOcrStatusBox">
+                    <div class="sd-ocr-spinner"></div>
+                    <span id="sdOcrStatusText">Analyzing screenshot with AI...</span>
+                </div>
+            </div>
+
+            <!-- OCR Results -->
+            <div id="sdOcrResults" style="display:none;">
+                <div class="sd-ocr-results">
+                    <div style="font-size:12px;color:#888;margin-bottom:10px;font-weight:600;"><i class="fas fa-search" style="color:#7C4DFF;"></i> AI Extracted Data</div>
+                    <div class="sd-ocr-row"><span class="sd-ocr-label">Transaction ID</span><span class="sd-ocr-value" id="sdResultTid">-</span></div>
+                    <div class="sd-ocr-row"><span class="sd-ocr-label">Amount</span><span class="sd-ocr-value" id="sdResultAmount">-</span></div>
+                    <div class="sd-ocr-row"><span class="sd-ocr-label">Date</span><span class="sd-ocr-value" id="sdResultDate">-</span></div>
+                    <div class="sd-ocr-row"><span class="sd-ocr-label">Receiver/Till</span><span class="sd-ocr-value" id="sdResultReceiver">-</span></div>
+                    <div class="sd-ocr-row"><span class="sd-ocr-label">Status</span><span class="sd-ocr-value" id="sdResultStatus">-</span></div>
+                    <div class="sd-ocr-confidence" id="sdOcrConfidence">OCR Confidence: 0%</div>
+                </div>
+            </div>
+
+            <!-- Validation Results -->
+            <div id="sdValidationResults" style="display:none;">
+                <div class="sd-validation-box">
+                    <div class="sd-validation-title"><i class="fas fa-clipboard-check"></i> Auto-Validation Results</div>
+                    <div id="sdValidationList"></div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button class="sd-submit-btn" id="sdSubmitBtn" onclick="submitSmartDeposit()" disabled>
+                <i class="fas fa-paper-plane"></i> Submit for Verification
+            </button>
+
+            <!-- Security Note -->
+            <div class="sd-security-note">
+                <i class="fas fa-lock"></i> Your screenshot is encrypted and stored securely. AI verification helps prevent fraud and speeds up approval.
+            </div>
+        </div>
+    </div>
+
     <!-- Deposit Popup -->
     <div class="popup-overlay dw-popup" id="depositPopup">
         <div class="popup-box">
@@ -1428,7 +1644,11 @@
                 <div style="font-size:12px;color:#ccc;">Get <b style="color:#FFD700;" id="popupBonusPercent">20%</b> extra on deposits above <b style="color:#FFD700;">Rs <span id="popupBonusMin">500</span></b></div>
                 <div style="font-size:11px;color:#888;margin-top:4px;" id="popupBonusCalc"></div>
             </div>
-            <button class="dw-submit" onclick="submitDeposit()">Submit Deposit Request</button>
+            <button class="dw-submit" onclick="submitDeposit()" id="regularDepositSubmit">Submit Deposit Request</button>
+            <div style="text-align:center;margin:8px 0;font-size:12px;color:#555;font-weight:600;">— OR —</div>
+            <button class="dw-submit" id="smartDepositBtn" onclick="openSmartDepositFromRegular()" style="background:linear-gradient(135deg,#7C4DFF,#651FFF);">
+                <i class="fas fa-shield-alt"></i> Deposit with Screenshot
+            </button>
         </div>
     </div>
 
@@ -4248,6 +4468,596 @@
             el.classList.add('show');
             setTimeout(() => el.classList.remove('show'), 2500);
         }
+
+        // ===================== SMART DEPOSIT VERIFICATION SYSTEM =====================
+        let sdSelectedAmount = 0;
+        let sdScreenshotFile = null;
+        let sdScreenshotBase64 = null;
+        let sdImageHash = null;
+        let sdOcrResult = null;
+        let sdValidationResult = null;
+        let sdTillNumber = '';
+        let isSdSubmitting = false;
+
+        function openSmartDepositFromRegular() {
+            const amount = parseInt(document.getElementById('depAmount').value) || 0;
+            closePopup('depositPopup');
+            openSmartDeposit(amount);
+        }
+
+        function openSmartDeposit(preselectedAmount) {
+            sdSelectedAmount = 0;
+            sdScreenshotFile = null;
+            sdScreenshotBase64 = null;
+            sdImageHash = null;
+            sdOcrResult = null;
+            sdValidationResult = null;
+            isSdSubmitting = false;
+
+            document.querySelectorAll('.sd-amount-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('sdCustomAmount').value = preselectedAmount > 0 ? preselectedAmount : '';
+            if(preselectedAmount > 0) sdSelectedAmount = preselectedAmount;
+            removeSdScreenshot();
+            document.getElementById('sdOcrResults').style.display = 'none';
+            document.getElementById('sdValidationResults').style.display = 'none';
+            document.getElementById('sdOcrStatus').style.display = 'none';
+            document.getElementById('sdSubmitBtn').disabled = true;
+            updateSdStepIndicator(1);
+            updateSdBonusDisplay();
+            loadSdTillNumber();
+
+            document.getElementById('smartDepositPopup').classList.add('active');
+        }
+
+        function closeSmartDeposit() {
+            document.getElementById('smartDepositPopup').classList.remove('active');
+        }
+
+        async function loadSdTillNumber() {
+            try {
+                const snap = await db.ref('game/settings/tillAccount').once('value');
+                sdTillNumber = snap.val() || 'Not Set';
+                document.getElementById('sdTillNumber').textContent = sdTillNumber;
+            } catch(e) {
+                sdTillNumber = 'Not Configured';
+                document.getElementById('sdTillNumber').textContent = sdTillNumber;
+            }
+        }
+
+        function selectSdAmount(amt, btnEl) {
+            sdSelectedAmount = amt;
+            document.querySelectorAll('.sd-amount-btn').forEach(b => b.classList.remove('active'));
+            btnEl.classList.add('active');
+            document.getElementById('sdCustomAmount').value = '';
+            updateSdStepIndicator(2);
+            checkSdSubmitReady();
+        }
+
+        function onSdCustomAmount(val) {
+            const amt = parseInt(val) || 0;
+            if(amt >= 500) {
+                sdSelectedAmount = amt;
+                document.querySelectorAll('.sd-amount-btn').forEach(b => b.classList.remove('active'));
+                updateSdStepIndicator(2);
+            } else {
+                sdSelectedAmount = 0;
+            }
+            checkSdSubmitReady();
+        }
+
+        function updateSdBonusDisplay() {
+            if(!depositBonusSettings || !depositBonusSettings.enabled) {
+                [500,1000,2000,5000,10000,20000].forEach(a => {
+                    const el = document.getElementById('sdBonus' + a);
+                    if(el) el.textContent = '';
+                });
+                return;
+            }
+            const minDep = depositBonusSettings.minDeposit || 500;
+            const pct = depositBonusSettings.bonusPercent || 0;
+            [500,1000,2000,5000,10000,20000].forEach(a => {
+                const el = document.getElementById('sdBonus' + a);
+                if(!el) return;
+                if(a >= minDep) {
+                    const bonus = Math.floor(a * pct / 100);
+                    el.textContent = '+Rs ' + bonus + ' bonus';
+                } else {
+                    el.textContent = '';
+                }
+            });
+        }
+
+        function copyTillNumber() {
+            const num = document.getElementById('sdTillNumber').textContent;
+            navigator.clipboard.writeText(num).then(() => {
+                const btn = document.getElementById('sdCopyTillBtn');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy Till Number';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        function handleSdScreenshotUpload(input) {
+            const file = input.files[0];
+            if(!file) return;
+            if(file.size > 5 * 1024 * 1024) {
+                toast('Image too large. Max 5MB allowed.');
+                input.value = '';
+                return;
+            }
+            sdScreenshotFile = file;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                sdScreenshotBase64 = e.target.result;
+                document.getElementById('sdPreviewImg').src = sdScreenshotBase64;
+                document.getElementById('sdScreenshotPreview').style.display = 'block';
+                document.getElementById('sdUploadArea').style.display = 'none';
+                updateSdStepIndicator(3);
+                computeImageHash(sdScreenshotBase64);
+                performOCR(sdScreenshotBase64);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeSdScreenshot() {
+            sdScreenshotFile = null;
+            sdScreenshotBase64 = null;
+            sdImageHash = null;
+            document.getElementById('sdScreenshotInput').value = '';
+            document.getElementById('sdScreenshotPreview').style.display = 'none';
+            document.getElementById('sdUploadArea').style.display = 'block';
+            document.getElementById('sdUploadArea').classList.remove('has-file');
+            document.getElementById('sdOcrResults').style.display = 'none';
+            document.getElementById('sdValidationResults').style.display = 'none';
+            document.getElementById('sdOcrStatus').style.display = 'none';
+            checkSdSubmitReady();
+        }
+
+        function computeImageHash(base64Image) {
+            try {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 32;
+                    canvas.height = 32;
+                    ctx.drawImage(img, 0, 0, 32, 32);
+                    const imageData = ctx.getImageData(0, 0, 32, 32).data;
+                    let hash = '';
+                    for(let i = 0; i < imageData.length; i += 16) {
+                        hash += (imageData[i] >> 4).toString(16);
+                    }
+                    sdImageHash = hash;
+                };
+                img.src = base64Image;
+            } catch(e) {
+                console.error('Image hash error:', e);
+                sdImageHash = 'hash_error_' + Date.now();
+            }
+        }
+
+        async function performOCR(base64Image) {
+            showOcrStatus('processing', 'Analyzing screenshot with AI OCR...');
+            const startTime = Date.now();
+
+            try {
+                if(typeof Tesseract === 'undefined') {
+                    showOcrStatus('error', 'OCR library not loaded. Using fallback.');
+                    await simulateFallbackOCR();
+                    return;
+                }
+
+                const result = await Tesseract.recognize(
+                    base64Image,
+                    'eng',
+                    { logger: m => {
+                        if(m.status === 'recognizing text') {
+                            showOcrStatus('processing', 'AI OCR: ' + Math.round(m.progress * 100) + '%');
+                        }
+                    }}
+                );
+
+                const rawText = result.data.text;
+                const confidence = result.data.confidence || 0;
+                const processingTime = Date.now() - startTime;
+
+                const extracted = extractFieldsFromText(rawText, confidence);
+                sdOcrResult = { ...extracted, rawText, confidence, processingTime };
+
+                displayOCRResults(sdOcrResult);
+                validateOCRResults(sdOcrResult);
+                logOcrProcessing(sdOcrResult);
+
+            } catch(e) {
+                console.error('OCR error:', e);
+                showOcrStatus('error', 'OCR failed. Using fallback.');
+                await simulateFallbackOCR();
+            }
+        }
+
+        function extractFieldsFromText(text, overallConfidence) {
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            let transactionId = '';
+            let amount = '';
+            let dateStr = '';
+            let receiverNumber = '';
+            let paymentStatus = '';
+
+            const tidPatterns = [
+                /TID[\s:]*([A-Z0-9]{6,20})/i,
+                /TRANSACTION[\s#:]*([A-Z0-9]{6,20})/i,
+                /TRX[\s#:]*([A-Z0-9]{6,20})/i,
+                /REF[\s#:]*([A-Z0-9]{6,20})/i,
+                /REFERENCE[\s#:]*([A-Z0-9]{6,20})/i,
+                /#([0-9]{8,16})/,
+                /ID[\s:]*([A-Z0-9]{8,16})/i
+            ];
+            for(const pattern of tidPatterns) {
+                const match = text.match(pattern);
+                if(match) { transactionId = match[1]; break; }
+            }
+
+            const amountPatterns = [
+                /RS[\s.]*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+                /PKR[\s.]*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+                /AMOUNT[\s:]*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+                /TOTAL[\s:]*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+                /([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?)/
+            ];
+            for(const pattern of amountPatterns) {
+                const match = text.match(pattern);
+                if(match) {
+                    const val = parseFloat(match[1].replace(/,/g, ''));
+                    if(val >= 100 && val <= 1000000) { amount = val.toString(); break; }
+                }
+            }
+
+            const datePatterns = [
+                /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/,
+                /(\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})/,
+                /([A-Z]{3,10}\s+\d{1,2},?\s+\d{4})/i,
+                /(\d{1,2}\s+[A-Z]{3,10}\s+\d{4})/i
+            ];
+            for(const pattern of datePatterns) {
+                const match = text.match(pattern);
+                if(match) { dateStr = match[1]; break; }
+            }
+
+            const receiverPatterns = [
+                /TILL[\s#:]*([0-9]{5,10})/i,
+                /RECEIVER[\s:]*([0-9]{10,12})/i,
+                /TO[\s:]*([0-9]{10,12})/i,
+                /SENT TO[\s:]*([0-9]{10,12})/i,
+                /MERCHANT[\s#:]*([0-9]{5,10})/i,
+                /([0-9]{5})\s/
+            ];
+            for(const pattern of receiverPatterns) {
+                const match = text.match(pattern);
+                if(match) { receiverNumber = match[1]; break; }
+            }
+
+            const successKeywords = ['SUCCESSFUL', 'COMPLETED', 'SUCCESS', 'CONFIRMED', 'PAID', 'DONE'];
+            const failedKeywords = ['FAILED', 'CANCELLED', 'DECLINED', 'ERROR'];
+            const upperText = text.toUpperCase();
+            if(successKeywords.some(k => upperText.includes(k))) paymentStatus = 'Successful';
+            else if(failedKeywords.some(k => upperText.includes(k))) paymentStatus = 'Failed';
+            else paymentStatus = 'Unknown';
+
+            return { transactionId, amount, dateStr, receiverNumber, paymentStatus, confidence: overallConfidence };
+        }
+
+        async function simulateFallbackOCR() {
+            sdOcrResult = {
+                transactionId: '', amount: '', dateStr: '', receiverNumber: '',
+                paymentStatus: 'Unknown', rawText: 'OCR failed - manual review required',
+                confidence: 0, processingTime: 0, fallback: true
+            };
+            displayOCRResults(sdOcrResult);
+            validateOCRResults(sdOcrResult);
+        }
+
+        function showOcrStatus(type, message) {
+            const statusBox = document.getElementById('sdOcrStatusBox');
+            const statusText = document.getElementById('sdOcrStatusText');
+            document.getElementById('sdOcrStatus').style.display = 'block';
+            statusBox.className = 'sd-ocr-status ' + type;
+            statusText.textContent = message;
+        }
+
+        function displayOCRResults(result) {
+            document.getElementById('sdOcrStatus').style.display = 'none';
+            document.getElementById('sdOcrResults').style.display = 'block';
+
+            const tidEl = document.getElementById('sdResultTid');
+            const amtEl = document.getElementById('sdResultAmount');
+            const dateEl = document.getElementById('sdResultDate');
+            const recvEl = document.getElementById('sdResultReceiver');
+            const statusEl = document.getElementById('sdResultStatus');
+            const confEl = document.getElementById('sdOcrConfidence');
+
+            tidEl.textContent = result.transactionId || 'Not Found';
+            tidEl.className = 'sd-ocr-value' + (result.transactionId ? '' : ' missing');
+
+            amtEl.textContent = result.amount ? 'Rs ' + parseFloat(result.amount).toLocaleString() : 'Not Found';
+            amtEl.className = 'sd-ocr-value' + (result.amount ? '' : ' missing');
+
+            dateEl.textContent = result.dateStr || 'Not Found';
+            dateEl.className = 'sd-ocr-value' + (result.dateStr ? '' : ' missing');
+
+            recvEl.textContent = result.receiverNumber || 'Not Found';
+            recvEl.className = 'sd-ocr-value' + (result.receiverNumber ? '' : ' missing');
+
+            statusEl.textContent = result.paymentStatus || 'Unknown';
+            statusEl.className = 'sd-ocr-value' + (result.paymentStatus === 'Successful' ? ' matched' : result.paymentStatus === 'Failed' ? ' missing' : ' low-confidence');
+
+            const confPct = Math.round(result.confidence || 0);
+            confEl.innerHTML = 'OCR Confidence: <b style="color:' + (confPct >= 70 ? '#00E676' : confPct >= 40 ? '#FF9800' : '#FF1744') + ';">' + confPct + '%</b>' +
+                (result.fallback ? ' <span style="color:#FF9800;">(Fallback Mode - Manual Review Required)</span>' : '');
+        }
+
+        async function validateOCRResults(ocrResult) {
+            const validations = [];
+            let canSubmit = true;
+            let needsManualReview = false;
+
+            if(!ocrResult.transactionId || ocrResult.transactionId.length < 4) {
+                validations.push({ icon: 'fa-times', cls: 'fail', text: 'Transaction ID is missing or unreadable' });
+                canSubmit = false;
+            } else {
+                validations.push({ icon: 'fa-check', cls: 'pass', text: 'Transaction ID found: ' + ocrResult.transactionId.substring(0,12) });
+            }
+
+            if(ocrResult.transactionId) {
+                try {
+                    const dupSnap = await db.ref('approvedTransactions').orderByChild('tid').equalTo(ocrResult.transactionId).once('value');
+                    if(dupSnap.exists()) {
+                        validations.push({ icon: 'fa-times', cls: 'fail', text: 'This Transaction ID was already used!' });
+                        canSubmit = false;
+                    } else {
+                        validations.push({ icon: 'fa-check', cls: 'pass', text: 'Transaction ID is new' });
+                    }
+                } catch(e) {
+                    validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Could not verify TID uniqueness' });
+                }
+            }
+
+            if(sdImageHash) {
+                try {
+                    const imgSnap = await db.ref('imageFingerprints/' + sdImageHash).once('value');
+                    if(imgSnap.exists()) {
+                        validations.push({ icon: 'fa-times', cls: 'fail', text: 'This screenshot was already uploaded before!' });
+                        canSubmit = false;
+                    } else {
+                        validations.push({ icon: 'fa-check', cls: 'pass', text: 'Screenshot is unique' });
+                    }
+                } catch(e) {
+                    validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Could not verify image uniqueness' });
+                }
+            }
+
+            if(ocrResult.amount) {
+                const ocrAmt = parseFloat(ocrResult.amount);
+                if(Math.abs(ocrAmt - sdSelectedAmount) < 1) {
+                    validations.push({ icon: 'fa-check', cls: 'pass', text: 'Amount matches: Rs ' + ocrAmt.toLocaleString() });
+                } else {
+                    validations.push({ icon: 'fa-times', cls: 'fail', text: 'Amount mismatch! Expected: Rs ' + sdSelectedAmount.toLocaleString() + ', Found: Rs ' + ocrAmt.toLocaleString() });
+                    canSubmit = false;
+                }
+            } else {
+                validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Could not read amount from screenshot' });
+                needsManualReview = true;
+            }
+
+            if(ocrResult.receiverNumber && sdTillNumber && sdTillNumber !== 'Not Set' && sdTillNumber !== 'Not Configured') {
+                if(ocrResult.receiverNumber === sdTillNumber || sdTillNumber.includes(ocrResult.receiverNumber) || ocrResult.receiverNumber.includes(sdTillNumber)) {
+                    validations.push({ icon: 'fa-check', cls: 'pass', text: 'Receiver/Till number matches' });
+                } else {
+                    validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Receiver number does not match exactly - will be reviewed' });
+                    needsManualReview = true;
+                }
+            } else {
+                validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Could not verify receiver number' });
+                needsManualReview = true;
+            }
+
+            if(ocrResult.paymentStatus === 'Successful') {
+                validations.push({ icon: 'fa-check', cls: 'pass', text: 'Payment status: Successful' });
+            } else if(ocrResult.paymentStatus === 'Failed') {
+                validations.push({ icon: 'fa-times', cls: 'fail', text: 'Payment appears to have failed!' });
+                canSubmit = false;
+            } else {
+                validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Payment status unclear - will be reviewed' });
+                needsManualReview = true;
+            }
+
+            if(ocrResult.confidence < 40 && !ocrResult.fallback) {
+                validations.push({ icon: 'fa-exclamation-triangle', cls: 'warn', text: 'Low OCR confidence - manual review recommended' });
+                needsManualReview = true;
+            }
+
+            if(needsManualReview && canSubmit) {
+                validations.push({ icon: 'fa-info-circle', cls: 'warn', text: 'Flagged for manual review due to unclear data' });
+            }
+
+            sdValidationResult = { passed: canSubmit, needsManualReview, reasons: validations };
+            displayValidationResults(validations);
+            checkSdSubmitReady();
+        }
+
+        function displayValidationResults(validations) {
+            document.getElementById('sdValidationResults').style.display = 'block';
+            const container = document.getElementById('sdValidationList');
+            container.innerHTML = validations.map(v =>
+                '<div class="sd-validation-item"><i class="fas ' + v.icon + ' ' + v.cls + '"></i> <span class="' + v.cls + '">' + v.text + '</span></div>'
+            ).join('');
+        }
+
+        async function submitSmartDeposit() {
+            if(isSdSubmitting) return;
+            if(!sdSelectedAmount || !sdScreenshotBase64) {
+                toast('Please select amount and upload screenshot');
+                return;
+            }
+            if(!sdValidationResult || !sdValidationResult.passed) {
+                toast('Validation failed. Please check the errors above.');
+                return;
+            }
+
+            isSdSubmitting = true;
+            const btn = document.getElementById('sdSubmitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+            try {
+                let bonusAmount = 0;
+                if(depositBonusSettings && depositBonusSettings.enabled && sdSelectedAmount >= depositBonusSettings.minDeposit) {
+                    bonusAmount = Math.floor(sdSelectedAmount * depositBonusSettings.bonusPercent / 100);
+                }
+
+                const requestRef = db.ref('depositRequests').push();
+                const requestId = requestRef.key;
+
+                await requestRef.set({
+                    userId: currentUser.uid,
+                    userName: userData.name || 'User',
+                    userPhone: userData.phone || '',
+                    amount: sdSelectedAmount,
+                    bonusAmount: bonusAmount,
+                    method: 'till',
+                    tillNumber: sdTillNumber,
+                    screenshotUrl: sdScreenshotBase64,
+                    imageHash: sdImageHash,
+                    status: sdValidationResult.needsManualReview ? 'under_review' : 'pending',
+                    ocrResult: sdOcrResult ? {
+                        transactionId: sdOcrResult.transactionId || '',
+                        amount: sdOcrResult.amount || '',
+                        dateStr: sdOcrResult.dateStr || '',
+                        receiverNumber: sdOcrResult.receiverNumber || '',
+                        paymentStatus: sdOcrResult.paymentStatus || '',
+                        confidence: sdOcrResult.confidence || 0,
+                        rawText: sdOcrResult.rawText || ''
+                    } : null,
+                    validationResult: sdValidationResult ? {
+                        passed: sdValidationResult.passed,
+                        needsManualReview: sdValidationResult.needsManualReview,
+                        validationSummary: (sdValidationResult.reasons || []).map(r => r.text)
+                    } : null,
+                    submittedAt: firebase.database.ServerValue.TIMESTAMP,
+                    reviewedAt: null,
+                    reviewedBy: null,
+                    reviewNotes: null
+                });
+
+                await db.ref('deposits').push({
+                    userId: currentUser.uid,
+                    userName: userData.name || 'User',
+                    userPhone: userData.phone || '',
+                    method: 'till (smart)',
+                    account: sdTillNumber,
+                    amount: sdSelectedAmount,
+                    trxId: sdOcrResult ? (sdOcrResult.transactionId || 'AI_VERIFICATION') : 'AI_VERIFICATION',
+                    status: sdValidationResult.needsManualReview ? 'under_review' : 'pending',
+                    bonusAmount: bonusAmount,
+                    smartDepositId: requestId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                if(sdImageHash) {
+                    await db.ref('imageFingerprints/' + sdImageHash).set({
+                        firstSeenAt: firebase.database.ServerValue.TIMESTAMP,
+                        requestId: requestId,
+                        userId: currentUser.uid
+                    });
+                }
+
+                closeSmartDeposit();
+                let msg = 'Smart deposit request submitted!';
+                if(sdValidationResult.needsManualReview) {
+                    msg += ' Flagged for manual review. Admin will verify shortly.';
+                } else {
+                    msg += ' AI verification passed. Pending admin approval.';
+                }
+                if(bonusAmount > 0) msg += ' Bonus: Rs ' + bonusAmount;
+                toast(msg);
+
+                if(currentTransTab === 'deposit') {
+                    loadTransactions('deposit');
+                }
+            } catch(e) {
+                console.error('Smart deposit submit error:', e);
+                toast('Error: ' + e.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit for Verification';
+                isSdSubmitting = false;
+            }
+        }
+
+        function checkSdSubmitReady() {
+            const btn = document.getElementById('sdSubmitBtn');
+            const ready = sdSelectedAmount > 0 && sdScreenshotBase64 && sdValidationResult && sdValidationResult.passed;
+            btn.disabled = !ready;
+        }
+
+        function updateSdStepIndicator(step) {
+            document.querySelectorAll('.sd-step').forEach((s, i) => {
+                s.classList.remove('active', 'completed');
+                if(i + 1 < step) s.classList.add('completed');
+                else if(i + 1 === step) s.classList.add('active');
+            });
+            document.querySelectorAll('.sd-step-line').forEach((l, i) => {
+                l.style.background = i + 1 < step ? '#00E676' : '#333';
+            });
+        }
+
+        async function logOcrProcessing(ocrResult) {
+            try {
+                await db.ref('ocrLogs').push({
+                    userId: currentUser ? currentUser.uid : 'anonymous',
+                    rawText: ocrResult.rawText || '',
+                    extractedFields: {
+                        transactionId: ocrResult.transactionId || '',
+                        amount: ocrResult.amount || '',
+                        dateStr: ocrResult.dateStr || '',
+                        receiverNumber: ocrResult.receiverNumber || '',
+                        paymentStatus: ocrResult.paymentStatus || ''
+                    },
+                    confidence: ocrResult.confidence || 0,
+                    processingTime: ocrResult.processingTime || 0,
+                    processedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            } catch(e) {
+                console.error('OCR log error:', e);
+            }
+        }
+
+        // Override renderTransList to handle smart deposit statuses
+        const _originalRenderTransList = renderTransList;
+        renderTransList = function(data, type) {
+            const container = document.getElementById('transList');
+            const list = data ? Object.entries(data).reverse() : [];
+            if(!list.length) { container.innerHTML = '<div style="text-align:center;color:#888;padding:30px;">No ' + type + ' history</div>'; return; }
+            container.innerHTML = '';
+            list.forEach(([id, t]) => {
+                const div = document.createElement('div');
+                div.className = 'trans-item';
+                let stCls = t.status === 'approved' ? 'status-approved' : t.status === 'rejected' ? 'status-rejected' : 'status-pending';
+                let stText = (t.status || 'pending').toUpperCase();
+                if(t.status === 'under_review') { stCls = 'trans-status under-review'; stText = 'UNDER REVIEW'; }
+                else if(t.status === 'verification_pending') { stCls = 'trans-status verification-pending'; stText = 'VERIFYING'; }
+                const dateStr = t.timestamp ? new Date(t.timestamp).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '-';
+                const isSmart = t.method && t.method.includes('smart');
+                div.innerHTML = '<div class="trans-info"><div class="trans-type">' + (type === 'deposit' ? 'Deposit' : 'Withdraw') + ' via ' + t.method + (isSmart ? ' <i class="fas fa-robot" style="color:#7C4DFF;"></i>' : '') + '</div>' +
+                    '<div class="trans-method">' + t.account + (type === 'deposit' ? ' | Trx: ' + (t.trxId || '-') : ' | ' + (t.accountName || '')) + '</div>' +
+                    '<div class="trans-method" style="color:#666;font-size:10px;margin-top:3px;"><i class="far fa-clock"></i> ' + dateStr + '</div></div>' +
+                    '<div style="text-align:right;"><div class="' + stCls + '" style="padding:3px 10px;border-radius:10px;font-size:10px;font-weight:700;display:inline-block;margin-bottom:4px;">' + stText + '</div>' +
+                    '<div class="trans-amount" style="color:#FFD700;">Rs ' + (t.amount || 0) + '</div></div>';
+                container.appendChild(div);
+            });
+        };
     </script>
 </body>
 </html>
