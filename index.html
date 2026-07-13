@@ -1625,7 +1625,7 @@
                 <i class="fas fa-cloud-upload-alt"></i>
                 <div class="sd-upload-text">Tap to upload payment screenshot</div>
                 <div class="sd-upload-hint">JPG, PNG supported. Max 5MB.</div>
-                <input type="file" class="sd-upload-input" id="sdScreenshotInput" accept="image/*" onchange="handleSdScreenshotUpload(this)">
+                <input type="file" class="sd-upload-input" id="sdScreenshotInput" accept="image/*" onclick="event.stopPropagation()" onchange="handleSdScreenshotUpload(this)">
             </div>
 
             <!-- Screenshot Preview -->
@@ -4176,8 +4176,24 @@
             const account = document.getElementById('depAccount').value.trim();
             const amount = parseInt(document.getElementById('depAmount').value);
             const trxId = document.getElementById('depTrxId').value.trim();
-            const minDep = (depositBonusSettings && depositBonusSettings.enabled) ? (depositBonusSettings.minDeposit || adminMinDeposit) : adminMinDeposit;
-            if(!account || !amount || amount < minDep) return toast('Min deposit Rs ' + minDep);
+
+            // FIX 1: Always fetch the latest min deposit from Firebase in real-time
+            let liveMinDeposit = adminMinDeposit;
+            try {
+                const minDepSnap = await db.ref('game/settings/minDeposit').once('value');
+                const liveVal = minDepSnap.val();
+                if(liveVal && typeof liveVal === 'number' && liveVal > 0) {
+                    liveMinDeposit = liveVal;
+                    adminMinDeposit = liveVal; // sync local cache too
+                }
+            } catch(e) { console.error('Failed to fetch live minDeposit:', e); }
+
+            const minDep = (depositBonusSettings && depositBonusSettings.enabled) ? (depositBonusSettings.minDeposit || liveMinDeposit) : liveMinDeposit;
+
+            // Validation with clear message
+            if(!account) return toast('Please enter your account number');
+            if(!amount || isNaN(amount) || amount <= 0) return toast('Please enter a valid deposit amount');
+            if(amount < minDep) return toast('Minimum deposit amount is Rs ' + minDep + '. Please enter Rs ' + minDep + ' or more.');
             if(!trxId) return toast('Enter transaction reference');
 
             try {
@@ -5105,7 +5121,7 @@
                 closeSmartDeposit();
                 let msg = 'Smart deposit request submitted!';
                 if(sdValidationResult.needsManualReview) {
-                    msg += ' Flagged for manual review. Admin will verify shortly.';
+                    msg += ' Flagged for manual review. company will verify shortly.';
                 } else {
                     msg += ' AI verification passed. Pending admin approval.';
                 }
