@@ -3982,6 +3982,20 @@
             currentMultiplier = parseInt(text.replace('X', '')) || 1;
         }
 
+        function getBetColor(betType, selection) {
+            if(betType === 'color') {
+                return selection === 'green' ? '#00E676' : '#FF1744';
+            }
+            if(betType === 'bs') {
+                return selection === 'small' ? '#448AFF' : '#FF9800';
+            }
+            if(betType === 'number') {
+                const num = parseInt(selection);
+                return num % 2 === 1 ? '#00E676' : '#FF1744';
+            }
+            return '#FFD700';
+        }
+
         function openBetPopup(typeName, betType, selection, odds) {
             if(!currentPeriod) return toast('Game loading, please wait...');
             if(!isOnline) return toast('You are offline. Please check your connection.');
@@ -3993,7 +4007,9 @@
 
             selectedBet = { typeName, betType, selection, odds };
             selectedAmount = 0;
-            document.getElementById('betTypeName').textContent = typeName;
+            const betTypeNameEl = document.getElementById('betTypeName');
+            betTypeNameEl.textContent = typeName;
+            betTypeNameEl.style.color = getBetColor(betType, selection);
             document.getElementById('betOdds').textContent = odds;
             document.querySelectorAll('.amt-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('customAmount').value = '';
